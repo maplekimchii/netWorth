@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Companies</h1>
+<form method="post" action="{{ url_for('company_add') }}" class="row">
+  <label>Add company <input name="name" required></label><button>Add</button>
+</form>
+<table>
+  <tr><th>Name</th><th>Priority</th><th>People</th><th>News updated</th></tr>
+  {% for co in companies %}
+  <tr><td><a href="{{ url_for('company_page', coid=co.id) }}">{{ co.name }}</a></td>
+      <td>{{ co.priority }}</td><td>{{ co.people }}</td><td>{{ (co.news_updated_at or '')[:10] }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

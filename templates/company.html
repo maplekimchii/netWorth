@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ co.name }} · netWorth{% endblock %}
+{% block body %}
+<h1>{{ co.name }}</h1>
+<form method="post" action="{{ url_for('company_update', coid=co.id) }}">
+  <div class="row">
+    <label>Domain <input name="domain" value="{{ co.domain }}"></label>
+    <label>Priority <select name="priority">
+      {% for p in (1, 2, 3) %}<option {% if co.priority == p %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Why this company (used in emails) <textarea name="notes" rows="3">{{ co.notes }}</textarea></label>
+  <button class="primary">Save</button>
+</form>
+
+<h2>Recent news</h2>
+<form method="post" action="{{ url_for('company_news', coid=co.id) }}"><button>Refresh news with AI</button>
+  {% if co.news_updated_at %}<span class="muted">Last updated {{ co.news_updated_at[:10] }}</span>{% endif %}</form>
+<pre>{{ co.news or 'No news yet.' }}</pre>
+
+<h2>People ({{ people|length }})</h2>
+<table>
+  {% for c in people %}
+  <tr><td><a href="{{ url_for('contact_page', cid=c.id) }}">{{ c.name }}</a></td><td>{{ c.title }}</td><td>{{ c.status }}</td></tr>
+  {% else %}<tr><td class="muted">No contacts yet. <a href="{{ url_for('find_page') }}">Find people</a></td></tr>{% endfor %}
+</table>
+
+<h2>Applications</h2>
+<table>
+  {% for a in apps %}
+  <tr><td>{{ a.role }}</td><td>{{ a.status }}</td><td>{{ a.referrer or '' }}</td></tr>
+  {% else %}<tr><td class="muted">None.</td></tr>{% endfor %}
+</table>
+<form method="post" action="{{ url_for('application_add') }}" class="row">
+  <input type="hidden" name="company" value="{{ co.name }}">
+  <label>Role <input name="role" required></label><label>Posting URL <input name="url"></label>
+  <button>Add application</button>
+</form>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Find people</h1>
+<form method="post" action="{{ url_for('find_search') }}" class="row">
+  <label>Company <input name="company" required></label>
+  <label>Focus <input name="focus" placeholder="e.g. PM, Waterloo alumni, recruiters"></label>
+  <button class="primary">Search with AI</button>
+</form>
+<p class="muted">Results come from public web pages. Check the source link before you reach out.</p>
+{% for p in results %}
+  <div class="card">
+    <strong>{{ p.name }}</strong> · {{ p.title }} at {{ p.company }}
+    <p>{{ p.why_relevant }}</p>
+    {% if p.source_url %}<a href="{{ p.source_url }}" target="_blank" rel="noopener">Source</a>{% endif %}
+    {% if p.linkedin_url %} · <a href="{{ p.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}
+    {% if p.saved %}<span class="muted"> · Saved</span>{% else %}
+      <form class="inline" method="post" action="{{ url_for('find_save', i=loop.index0) }}"><button>Save</button></form>{% endif %}
+  </div>
+{% endfor %}
+
+<h2>Paste a profile</h2>
+<form method="post" action="{{ url_for('find_parse') }}">
+  <label>Profile text (on LinkedIn: select all, copy, paste here)
+    <textarea name="text" rows="8" required></textarea></label>
+  <button class="primary">Extract with AI</button>
+</form>
+{% if parsed %}
+  <form method="post" action="{{ url_for('contact_add') }}" class="card">
+    <input type="hidden" name="source" value="paste">
+    <label>Name <input name="name" value="{{ parsed.name }}" required></label>
+    <label>Company <input name="company" value="{{ parsed.company }}"></label>
+    <label>Title <input name="title" value="{{ parsed.title }}"></label>
+    <label>Email <input name="email" type="email" value="{{ parsed.email }}"></label>
+    <label>LinkedIn URL <input name="linkedin_url" value="{{ parsed.linkedin_url }}"></label>
+    <label>How connected <input name="how_connected"></label>
+    <label>Notes <textarea name="notes" rows="3">{{ parsed.notes }}</textarea></label>
+    <button class="primary">Save contact</button>
+  </form>
+{% endif %}
+{% endblock %}

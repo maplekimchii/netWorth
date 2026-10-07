@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Applications</h1>
+<form method="post" action="{{ url_for('application_add') }}" class="row">
+  <label>Company <input name="company" required></label>
+  <label>Role <input name="role" required></label>
+  <label>Posting URL <input name="url"></label>
+  <label>Referrer <select name="referrer_contact_id"><option value="">None</option>
+    {% for c in contacts %}<option value="{{ c.id }}">{{ c.name }}{% if c.company %} ({{ c.company }}){% endif %}</option>{% endfor %}</select></label>
+  <button class="primary">Add</button>
+</form>
+<table>
+  <tr><th>Company</th><th>Role</th><th>Applied</th><th>Status and referrer</th></tr>
+  {% for a in apps %}
+  <tr>
+    <td>{{ a.company }}</td>
+    <td>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.role }}</a>{% else %}{{ a.role }}{% endif %}</td>
+    <td>{{ a.applied_date or '' }}</td>
+    <td><form method="post" action="{{ url_for('application_update', aid=a.id) }}" class="row">
+      <select name="status" aria-label="Status">{% for s in app_statuses %}<option {% if a.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+      <select name="referrer_contact_id" aria-label="Referrer"><option value="">No referrer</option>
+        {% for c in contacts %}<option value="{{ c.id }}" {% if a.referrer_contact_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+      <button>Save</button></form></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

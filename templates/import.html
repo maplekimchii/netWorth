@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Import / Export</h1>
+{% if stage == 'start' %}
+  <h2>LinkedIn connections</h2>
+  <p class="muted">LinkedIn → Settings → Data privacy → Get a copy of your data → Connections. Upload Connections.csv.</p>
+  <form method="post" action="{{ url_for('import_linkedin') }}" enctype="multipart/form-data" class="row">
+    <input type="file" name="file" accept=".csv" required aria-label="Connections.csv"><button class="primary">Import</button>
+  </form>
+  <h2>Any spreadsheet (e.g. PitchBook export)</h2>
+  <form method="post" action="{{ url_for('import_upload') }}" enctype="multipart/form-data" class="row">
+    <input type="file" name="file" accept=".xlsx,.csv" required aria-label="Spreadsheet"><button class="primary">Upload and map columns</button>
+  </form>
+  <h2>Export</h2>
+  <a href="{{ url_for('export') }}">Download everything as .xlsx</a>
+{% elif stage == 'map' %}
+  {% if sheets|length > 1 %}
+  <form method="get" class="row"><label>Sheet <select name="sheet" onchange="this.form.submit()">
+    {% for s in sheets %}<option {% if s == sheet %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label></form>
+  {% endif %}
+  <form method="post">
+    <input type="hidden" name="sheet" value="{{ sheet }}">
+    <table>
+      <tr><th>Column</th><th>Maps to</th><th>First value</th></tr>
+      {% for h in headers %}
+      <tr><td>{{ h }}</td>
+        <td><select name="map_{{ loop.index0 }}" aria-label="Field for {{ h }}"><option value="">(skip)</option>
+          {% for f in fields %}<option {% if mapping.get(h) == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></td>
+        <td>{{ preview[0][h] if preview else '' }}</td></tr>
+      {% endfor %}
+    </table>
+    <p class="muted">Preview: {{ preview|length }} of the first rows shown above. Map "name", or both "first_name" and "last_name".</p>
+    <button class="primary">Import</button>
+  </form>
+{% elif stage == 'report' %}
+  <p>Added {{ report.added }}. Skipped {{ report.skipped }} duplicates. Failed {{ report.failed|length }}.</p>
+  {% if report.failed %}<ul>{% for f in report.failed %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+  <a href="{{ url_for('contacts_page') }}">See contacts</a> · <a href="{{ url_for('import_page') }}">Import more</a>
+{% endif %}
+{% endblock %}

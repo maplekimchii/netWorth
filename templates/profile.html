@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Profile</h1>
+<p class="muted">The AI uses this for every draft.</p>
+<form method="post">
+  <label>Your name <input name="name" value="{{ p.name }}"></label>
+  <label>Program (e.g. "Computer Science") <input name="program" value="{{ p.program }}"></label>
+  <label>Target roles, comma separated (the first one fills {target_role}) <input name="target_roles" value="{{ p.target_roles }}"></label>
+  <label>Your story (2-4 sentences) <textarea name="story" rows="4">{{ p.story }}</textarea></label>
+  <label>Resume (paste text) <textarea name="resume_text" rows="10">{{ p.resume_text }}</textarea></label>
+  <label>Voice samples: 1-2 emails you wrote yourself <textarea name="voice_samples" rows="10">{{ p.voice_samples }}</textarea></label>
+  <label>Days before a follow-up is due <input name="followup_days" type="number" min="1" value="{{ p.followup_days }}"></label>
+  <button class="primary">Save</button>
+</form>
+{% endblock %}

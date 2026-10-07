@@ -232,3 +232,23 @@ def test_draft_and_mailto_without_recipient():
     assert outlook.draft_payload("", "S", "B")["toRecipients"] == []
     assert outlook.draft_payload("a@b.com", "S", "B")["toRecipients"] == [{"emailAddress": {"address": "a@b.com"}}]
     assert outlook.mailto_link("", "Hi there", "Line 1\nLine 2") == "mailto:?subject=Hi%20there&body=Line%201%0ALine%202"
+
+
+# --- app ---
+
+def test_every_page_renders_and_contact_flow_works(tmp_path, monkeypatch):
+    import app as webapp
+    monkeypatch.setattr(outlook, "enabled", lambda: False)
+    webapp.app.config["DB_PATH"] = tmp_path / "web.db"
+    client = webapp.app.test_client()
+    for path in ["/", "/contacts", "/companies", "/find", "/applications", "/templates", "/profile", "/import"]:
+        assert client.get(path).status_code == 200, path
+    r = client.post("/contacts", data={"name": "Jane Doe", "company": "Stripe", "source": "paste"})
+    assert r.status_code == 302
+    assert b"Jane Doe" in client.get(r.headers["Location"]).data
+    assert client.post("/contacts", data={"name": "jane doe", "company": "stripe", "source": "paste"}).status_code == 302
+    assert client.get("/companies/1").status_code == 200
+    r = client.post("/contacts/1/save_draft", data={"subject": "Hi", "body": "Hello", "kind": "initial", "action": "local"})
+    assert r.status_code == 302
+    page = client.get("/contacts/1").data
+    assert b"mailto:" in page and b"No email on file" in page

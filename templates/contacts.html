@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Contacts ({{ contacts|length }})</h1>
+<form method="get" class="row">
+  <label>Status <select name="status"><option value="">Any</option>
+    {% for s in statuses %}<option {% if args.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Company <select name="company_id"><option value="">Any</option>
+    {% for co in companies %}<option value="{{ co.id }}" {% if args.company_id == co.id|string %}selected{% endif %}>{{ co.name }}</option>{% endfor %}</select></label>
+  <label>Source <select name="source"><option value="">Any</option>
+    {% for s in sources %}<option {% if args.source == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <button>Filter</button>
+</form>
+
+<details class="card"><summary>Add a contact by hand</summary>
+  <form method="post" action="{{ url_for('contact_add') }}">
+    <input type="hidden" name="source" value="paste">
+    <label>Name <input name="name" required></label>
+    <label>Company <input name="company"></label>
+    <label>Title <input name="title"></label>
+    <label>Email <input name="email" type="email"></label>
+    <label>LinkedIn URL <input name="linkedin_url"></label>
+    <label>How connected <input name="how_connected"></label>
+    <button class="primary">Add</button>
+  </form>
+</details>
+
+<table>
+  <tr><th>Name</th><th>Company</th><th>Title</th><th>Source</th><th>Status</th><th>Follow up</th></tr>
+  {% for c in contacts %}
+  <tr>
+    <td><a href="{{ url_for('contact_page', cid=c.id) }}">{{ c.name }}</a></td>
+    <td>{{ c.company or '' }}</td><td>{{ c.title }}</td><td>{{ c.source }}</td>
+    <td><form method="post" action="{{ url_for('contact_status', cid=c.id) }}">
+      <select name="status" aria-label="Status for {{ c.name }}" onchange="this.form.submit()">
+        {% for s in statuses %}<option {% if c.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select></form></td>
+    <td>{{ c.next_followup_date or '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

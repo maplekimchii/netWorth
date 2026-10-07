@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}netWorth{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav>
+  <strong>netWorth</strong>
+  {% for ep, label in [('today_page', 'Today'), ('contacts_page', 'Contacts'), ('companies_page', 'Companies'),
+                       ('find_page', 'Find'), ('applications_page', 'Applications'), ('templates_page', 'Templates'),
+                       ('profile_page', 'Profile'), ('import_page', 'Import/Export')] %}
+    <a href="{{ url_for(ep) }}" {% if request.endpoint == ep %}aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+<main>
+  {% for m in get_flashed_messages() %}<p class="flash" role="status">{{ m }}</p>{% endfor %}
+  {% block body %}{% endblock %}
+</main>
+</body>
+</html>
