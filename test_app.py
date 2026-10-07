@@ -211,3 +211,24 @@ def test_export_has_a_sheet_per_table(con):
     wb = openpyxl.load_workbook(io.BytesIO(importers.export_xlsx(con)))
     assert {"contacts", "companies", "messages", "applications"} <= set(wb.sheetnames)
     assert wb["contacts"]["B2"].value == "Jane Doe"
+
+
+# --- outlook ---
+
+def graph_msg(addr, when, draft=False):
+    return {"isDraft": draft, "from": {"emailAddress": {"address": addr}}, "sentDateTime": when, "receivedDateTime": when}
+
+
+def test_classify_conversation():
+    me = "me@uwaterloo.ca"
+    assert outlook.classify([graph_msg(me, "2026-10-01T09:00:00Z", draft=True)], me, "2026-10-01 08:00:00") == (None, None)
+    convo = [graph_msg("Me@UWaterloo.ca", "2026-10-01T09:00:00Z"), graph_msg("jane@stripe.com", "2026-10-02T10:00:00Z")]
+    assert outlook.classify(convo, me, "2026-10-01 08:00:00") == ("2026-10-01T09:00:00Z", "2026-10-02T10:00:00Z")
+    # A follow-up drafted later in the same thread ignores the earlier send and reply.
+    assert outlook.classify(convo, me, "2026-10-05 08:00:00") == (None, None)
+
+
+def test_draft_and_mailto_without_recipient():
+    assert outlook.draft_payload("", "S", "B")["toRecipients"] == []
+    assert outlook.draft_payload("a@b.com", "S", "B")["toRecipients"] == [{"emailAddress": {"address": "a@b.com"}}]
+    assert outlook.mailto_link("", "Hi there", "Line 1\nLine 2") == "mailto:?subject=Hi%20there&body=Line%201%0ALine%202"
