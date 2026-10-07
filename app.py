@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-import anthropic
+import openai
 import requests
 from dotenv import load_dotenv
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, url_for
@@ -70,12 +70,12 @@ def back(default):
 
 
 def guarded(fn, *args, **kwargs):
-    """Run a Claude or Outlook call. On failure, flash the reason and return None."""
+    """Run an AI or Outlook call. On failure, flash the reason and return None."""
     try:
         return fn(*args, **kwargs)
     except outlook.NotConnected:
         flash("Outlook is not connected. Use 'Connect Outlook' on the Today page.")
-    except (ai.AIError, anthropic.APIError, outlook.OutlookError, requests.RequestException) as e:
+    except (ai.AIError, openai.OpenAIError, outlook.OutlookError, requests.RequestException) as e:
         flash(f"Error: {e}")
     return None
 

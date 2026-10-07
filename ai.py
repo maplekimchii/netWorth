@@ -1,12 +1,12 @@
-"""Email template filling and Claude calls."""
+"""Email template filling and OpenAI calls."""
 import json
 import os
 import re
 
-import anthropic
+import openai
 
-MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
-WEB_SEARCH = {"type": "web_search_20260209", "name": "web_search", "max_uses": 5}
+MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
+WEB_SEARCH = {"type": "web_search"}
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 SLOT = re.compile(r"\[\[(\w+):\s*(.*?)\]\]", re.S)
 
@@ -21,7 +21,10 @@ _client = None
 def client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic()
+        try:
+            _client = openai.OpenAI()
+        except openai.OpenAIError as e:
+            raise AIError("No OpenAI API key found. Set OPENAI_API_KEY in .env and restart.") from e
     return _client
 
 
@@ -48,42 +51,22 @@ def unfilled(text):
 def parse_json(text):
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end < start:
-        raise AIError("Claude did not return JSON.")
+        raise AIError("The AI did not return JSON.")
     try:
         return json.loads(text[start:end + 1])
     except json.JSONDecodeError as e:
-        raise AIError(f"Claude returned invalid JSON: {e}") from e
+        raise AIError(f"The AI returned invalid JSON: {e}") from e
 
 
-# --- Claude calls ---
+# --- OpenAI calls ---
 
 def _call(system, prompt, search=False):
-    messages = [{"role": "user", "content": prompt}]
     extra = {"tools": [WEB_SEARCH]} if search else {}
-    for _ in range(5):
-        try:
-            resp = client().beta.messages.create(
-                model=MODEL, max_tokens=16000, system=system, messages=messages,
-                output_config={"effort": "medium"},
-                betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-                **extra,
-            )
-        except TypeError as e:
-            # The SDK raises TypeError, not an API error, when no credentials are configured.
-            if "authentication" not in str(e):
-                raise
-            raise AIError("No Anthropic API key found. Set ANTHROPIC_API_KEY in .env and restart.") from e
-        if resp.stop_reason == "refusal":
-            raise AIError("Claude declined this request.")
-        if resp.stop_reason != "pause_turn":
-            return "".join(b.text for b in resp.content if b.type == "text")
-        # Long web search paused mid-turn: send the partial turn back so Claude continues it.
-        messages = [messages[0], {"role": "assistant", "content": resp.content}]
-    raise AIError("Web search did not finish. Try a narrower search.")
+    return client().responses.create(model=MODEL, instructions=system, input=prompt, **extra).output_text or ""
 
 
 def ask_json(system, prompt, search=False):
-    """Ask Claude for a JSON object; retry once if the reply is not valid JSON."""
+    """Ask the model for a JSON object; retry once if the reply is not valid JSON."""
     for attempt in (1, 2):
         try:
             return parse_json(_call(system, prompt, search))

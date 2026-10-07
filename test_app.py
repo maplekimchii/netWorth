@@ -149,7 +149,7 @@ def test_draft_fills_data_first_then_only_slots(monkeypatch):
 
 
 def test_draft_without_slots_makes_no_ai_call(monkeypatch):
-    monkeypatch.setattr(ai, "fill_slots", lambda *a: pytest.fail("should not call Claude"))
+    monkeypatch.setattr(ai, "fill_slots", lambda *a: pytest.fail("should not call the AI"))
     tpl = {"subject": "Hi", "body": "Hi {first_name}"}
     assert ai.draft(tpl, PROFILE, {"name": "Jane Doe"}, None, []) == ("Hi", "Hi Jane")
 
@@ -255,16 +255,26 @@ def test_every_page_renders_and_contact_flow_works(tmp_path, monkeypatch):
 
 
 def test_missing_api_key_becomes_readable_ai_error(monkeypatch):
-    class NoAuth:
-        class beta:
-            class messages:
-                @staticmethod
-                def create(**kwargs):
-                    raise TypeError('"Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set."')
-
-    monkeypatch.setattr(ai, "client", lambda: NoAuth)
-    with pytest.raises(ai.AIError, match="ANTHROPIC_API_KEY"):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(ai, "_client", None)
+    with pytest.raises(ai.AIError, match="OPENAI_API_KEY"):
         ai.ask_json("system", "prompt")
+
+
+def test_call_uses_responses_api_with_web_search_only_when_asked(monkeypatch):
+    calls = []
+
+    class FakeResponses:
+        @staticmethod
+        def create(**kwargs):
+            calls.append(kwargs)
+            return type("R", (), {"output_text": '{"ok": true}'})()
+
+    monkeypatch.setattr(ai, "client", lambda: type("C", (), {"responses": FakeResponses})())
+    assert ai.ask_json("be brief", "hi", search=True) == {"ok": True}
+    assert ai.ask_json("be brief", "hi") == {"ok": True}
+    assert calls[0]["model"] == ai.MODEL and calls[0]["instructions"] == "be brief" and calls[0]["input"] == "hi"
+    assert calls[0]["tools"] == [{"type": "web_search"}] and "tools" not in calls[1]
 
 
 # --- final review fixes ---

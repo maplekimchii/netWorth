@@ -1,5 +1,5 @@
 flask
-anthropic
+openai
 msal
 requests
 openpyxl

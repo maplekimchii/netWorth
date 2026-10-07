@@ -20,7 +20,7 @@ A locally hosted web app that supports a job search through networking. It cover
 ### Assumptions
 
 - Single user, runs only on the user's laptop (`localhost`), no authentication.
-- AI is Claude via the Anthropic API, model `claude-opus-5-5` (configurable). Expected cost is roughly $5–20/month at job-search volume.
+- AI is OpenAI via the Responses API, model `gpt-6-luna` (configurable with `OPENAI_MODEL`).
 - Email account is a University of Waterloo Microsoft 365 account.
 
 ### Non-goals (v1)
@@ -35,7 +35,7 @@ A locally hosted web app that supports a job search through networking. It cover
 
 - Python 3.12+, Flask, Jinja templates, plain HTML/CSS (no JS framework; small inline JS where needed).
 - SQLite via the standard library `sqlite3` module.
-- Dependencies: `flask`, `anthropic`, `msal`, `requests`, `openpyxl`, `python-dotenv`, `pytest` (dev).
+- Dependencies: `flask`, `openai`, `msal`, `requests`, `openpyxl`, `python-dotenv`, `pytest` (dev).
 - Run with `python app.py`, then open `http://localhost:5000`.
 
 ## 3. File layout
@@ -44,7 +44,7 @@ A locally hosted web app that supports a job search through networking. It cover
 netWorth/
   app.py          Flask routes and page handlers
   db.py           SQLite schema, migrations-on-start, query helpers
-  ai.py           Claude calls: find people, parse profile, company research, fill template slots
+  ai.py           OpenAI calls: find people, parse profile, company research, fill template slots
   outlook.py      Microsoft Graph: device-code login, create draft, sync sent/replied
   importers.py    LinkedIn Connections.csv, generic Excel with column mapping, Excel export
   templates/      Jinja HTML pages
@@ -52,7 +52,7 @@ netWorth/
   test_app.py     pytest suite
   networth.db     Data (gitignored)
   .token_cache.json  MSAL token cache (gitignored)
-  .env            ANTHROPIC_API_KEY, MS_CLIENT_ID, MS_TENANT (gitignored)
+  .env            OPENAI_API_KEY, OPENAI_MODEL, MS_CLIENT_ID, MS_TENANT (gitignored)
 ```
 
 ## 4. Data model
@@ -99,11 +99,11 @@ netWorth/
 Template bodies contain two kinds of placeholders:
 
 - **Data placeholders** `{name}`: filled directly from the database without AI. Supported: `{first_name}`, `{last_name}`, `{company}`, `{title}`, `{my_name}`, `{my_program}`, `{target_role}`.
-- **AI slots** `[[slot_name: instruction]]`: filled by Claude. The instruction after the colon tells the AI what to write for that slot.
+- **AI slots** `[[slot_name: instruction]]`: filled by the AI. The instruction after the colon tells the AI what to write for that slot.
 
 Rules:
-- Fixed template text is never altered by the AI. The app fills data placeholders, sends only the slot instructions plus context to Claude, then substitutes the returned slot text.
-- Claude writes slots in the user's voice, using `voice_samples` as style reference.
+- Fixed template text is never altered by the AI. The app fills data placeholders, sends only the slot instructions plus context to the AI, then substitutes the returned slot text.
+- The AI writes slots in the user's voice, using `voice_samples` as style reference.
 - Unknown `{placeholder}` names are left visible and highlighted so the user notices them.
 - The filled result appears in an editable subject field and body textarea before any Outlook action.
 
@@ -126,17 +126,17 @@ Best,
 
 ## 7. AI flows (`ai.py`)
 
-All calls use the Anthropic Python SDK with model from config (default `claude-opus-5-5`). Every AI result is shown for review; nothing is saved or sent to Outlook without a user click.
+All calls use the OpenAI Python SDK Responses API with model from config (default `gpt-6-luna`). Every AI result is shown for review; nothing is saved or sent to Outlook without a user click.
 
-1. **Find people**: input is company + role focus. Claude uses the server-side web search tool and returns JSON: list of `{name, title, why_relevant, source_url, linkedin_url?}`. Shown as cards with a Save button. Saved contacts get `source=ai_search`. Source links are always shown so the user can verify stale or wrong results.
-2. **Parse profile**: input is pasted profile text (LinkedIn or anywhere). Claude returns contact fields as JSON, shown in an editable form before saving. The app does not fetch LinkedIn URLs.
-3. **Company research**: Claude web-searches the company and returns 3–5 bullets (recent launches, funding, hiring signals). Stored in `companies.news` with timestamp.
+1. **Find people**: input is company + role focus. The model uses the built-in `web_search` tool and returns JSON: list of `{name, title, why_relevant, source_url, linkedin_url?}`. Shown as cards with a Save button. Saved contacts get `source=ai_search`. Source links are always shown so the user can verify stale or wrong results.
+2. **Parse profile**: input is pasted profile text (LinkedIn or anywhere). The model returns contact fields as JSON, shown in an editable form before saving. The app does not fetch LinkedIn URLs.
+3. **Company research**: The model web-searches the company and returns 3–5 bullets (recent launches, funding, hiring signals). Stored in `companies.news` with timestamp.
 4. **Fill template slots**: inputs are profile, contact, company notes and news, `how_connected`, prior messages with this contact, and the list of slot instructions. Output is JSON mapping slot name to text.
 5. **Follow-up**: same as 4 using a `followup` template; prior message bodies are included in the context.
 
 Error handling:
 - API errors are shown on the page with a Retry button.
-- Invalid JSON from Claude triggers one automatic retry, then a visible error.
+- Invalid JSON from the model triggers one automatic retry, then a visible error.
 - Missing slot keys in the response are left as visible `[[slot]]` markers rather than failing the whole draft.
 
 ## 8. Outlook integration (`outlook.py`)
@@ -176,13 +176,13 @@ Note: if the PitchBook seat belongs to the user's employer, using it for a perso
 
 ## 11. Testing
 
-One `test_app.py` using pytest, with Claude and Graph replaced by fakes:
+One `test_app.py` using pytest, with the OpenAI client and Graph replaced by fakes:
 - Status transitions and follow-up date calculations.
 - Template filling: data placeholders, slot extraction, slot substitution, unknown placeholder handling, missing slot handling.
 - LinkedIn CSV import including preamble lines and duplicate skipping.
 - Sync logic: sent detection and reply detection against fake Graph responses.
 
-Manual smoke test against real Outlook and the Anthropic API after automated tests pass.
+Manual smoke test against real Outlook and the OpenAI API after automated tests pass.
 
 ## 12. v2 (out of scope for v1)
 
