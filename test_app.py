@@ -153,3 +153,61 @@ def test_draft_without_slots_makes_no_ai_call(monkeypatch):
     tpl = {"subject": "Hi", "body": "Hi {first_name}"}
     assert ai.draft(tpl, PROFILE, {"name": "Jane Doe"}, None, []) == ("Hi", "Hi Jane")
 
+
+
+# --- importers ---
+
+LINKEDIN_CSV = (
+    "﻿Notes:\n"
+    "\"When exporting your connection data, you may notice that some of the email addresses are missing.\"\n"
+    "\n"
+    "First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+    "Jane,Doe,https://www.linkedin.com/in/janedoe,,Stripe,PM,01 Oct 2026\n"
+    "Bob,,https://www.linkedin.com/in/bob,,,,02 Oct 2026\n"
+    ",,,,,,\n"
+    "Jane,Doe,https://www.linkedin.com/in/janedoe,,Stripe,PM,01 Oct 2026\n"
+).encode()
+
+
+def test_linkedin_import_handles_bom_preamble_blanks_and_duplicates(con):
+    report = importers.import_linkedin(con, LINKEDIN_CSV)
+    assert report == {"added": 2, "skipped": 1, "failed": ["row 3: missing name"]}
+    jane = db.list_contacts(con, source="linkedin_csv")[-1]
+    assert (jane["name"], jane["company"], jane["title"]) == ("Jane Doe", "Stripe", "PM")
+    assert jane["how_connected"] == "1st-degree LinkedIn connection"
+
+
+def test_linkedin_import_rejects_other_csv(con):
+    with pytest.raises(ValueError):
+        importers.import_linkedin(con, b"a,b\n1,2\n")
+
+
+def test_excel_import_skips_title_rows_and_remembers_mapping(con):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["PitchBook search results"])
+    ws.append([])
+    ws.append(["Full Name", "Employer", "Job Title"])
+    ws.append(["Ann Lee", "Figma", "Recruiter"])
+    ws.append([None, None, None])
+    buf = io.BytesIO()
+    wb.save(buf)
+    sheets, headers, rows = importers.read_table("people.xlsx", buf.getvalue())
+    assert headers == ["Full Name", "Employer", "Job Title"]
+    assert rows == [{"Full Name": "Ann Lee", "Employer": "Figma", "Job Title": "Recruiter"}]
+    mapping = {"Full Name": "name", "Employer": "company", "Job Title": "title"}
+    importers.save_mapping(con, headers, mapping)
+    assert importers.saved_mapping(con, headers) == mapping
+    assert importers.import_rows(con, rows, mapping, "import")["added"] == 1
+
+
+def test_read_table_rejects_garbage():
+    with pytest.raises(ValueError):
+        importers.read_table("people.xlsx", b"not an excel file")
+
+
+def test_export_has_a_sheet_per_table(con):
+    db.add_contact(con, "Jane Doe", "paste")
+    wb = openpyxl.load_workbook(io.BytesIO(importers.export_xlsx(con)))
+    assert {"contacts", "companies", "messages", "applications"} <= set(wb.sheetnames)
+    assert wb["contacts"]["B2"].value == "Jane Doe"
