@@ -252,3 +252,16 @@ def test_every_page_renders_and_contact_flow_works(tmp_path, monkeypatch):
     assert r.status_code == 302
     page = client.get("/contacts/1").data
     assert b"mailto:" in page and b"No email on file" in page
+
+
+def test_missing_api_key_becomes_readable_ai_error(monkeypatch):
+    class NoAuth:
+        class beta:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    raise TypeError('"Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set."')
+
+    monkeypatch.setattr(ai, "client", lambda: NoAuth)
+    with pytest.raises(ai.AIError, match="ANTHROPIC_API_KEY"):
+        ai.ask_json("system", "prompt")

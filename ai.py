@@ -61,12 +61,18 @@ def _call(system, prompt, search=False):
     messages = [{"role": "user", "content": prompt}]
     extra = {"tools": [WEB_SEARCH]} if search else {}
     for _ in range(5):
-        resp = client().beta.messages.create(
-            model=MODEL, max_tokens=16000, system=system, messages=messages,
-            output_config={"effort": "medium"},
-            betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-            **extra,
-        )
+        try:
+            resp = client().beta.messages.create(
+                model=MODEL, max_tokens=16000, system=system, messages=messages,
+                output_config={"effort": "medium"},
+                betas=["server-side-fallback-2026-07-01"], fallbacks="default",
+                **extra,
+            )
+        except TypeError as e:
+            # The SDK raises TypeError, not an API error, when no credentials are configured.
+            if "authentication" not in str(e):
+                raise
+            raise AIError("No Anthropic API key found. Set ANTHROPIC_API_KEY in .env and restart.") from e
         if resp.stop_reason == "refusal":
             raise AIError("Claude declined this request.")
         if resp.stop_reason != "pause_turn":
