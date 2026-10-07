@@ -106,3 +106,50 @@ def test_application_status_change_sets_applied_date(con):
     db.update_application(con, aid, "applied")
     a = con.execute("SELECT * FROM applications WHERE id = ?", (aid,)).fetchone()
     assert a["applied_date"] and a["updated_at"] > "2026-09-01 12:00:00"
+
+
+# --- ai ---
+
+def test_fill_data_leaves_unknown_and_empty_placeholders_visible():
+    out = ai.fill_data("Hi {first_name} at {company}, {mystery}", {"first_name": "Jane", "company": ""})
+    assert out == "Hi Jane at {company}, {mystery}"
+    assert ai.unfilled(out + " [[hook: x]]") == ["{company}", "{mystery}", "[[hook: x]]"]
+
+
+def test_slots_extract_and_apply_keeps_missing_marker():
+    text = "A [[hook: why them]] B [[why_company: why\nStripe]]"
+    assert ai.extract_slots(text) == {"hook": "why them", "why_company": "why\nStripe"}
+    assert ai.apply_slots(text, {"hook": " We both did CS. "}) == "A We both did CS. B [[why_company: why\nStripe]]"
+
+
+def test_parse_json_handles_fences_and_prose():
+    assert ai.parse_json('Sure!\n```json\n{"a": [1]}\n```') == {"a": [1]}
+    with pytest.raises(ai.AIError):
+        ai.parse_json("no json here")
+    with pytest.raises(ai.AIError):
+        ai.parse_json("{not: valid}")
+
+
+PROFILE = {"name": "Alex Lee", "program": "CS", "target_roles": "Product, eng", "voice_samples": "hey!"}
+
+
+def test_draft_fills_data_first_then_only_slots(monkeypatch):
+    seen = {}
+
+    def fake_fill(slots, context, voice):
+        seen.update(slots)
+        assert voice == "hey!" and "Stripe" in context
+        return {"hook": "Loved your talk."}
+
+    monkeypatch.setattr(ai, "fill_slots", fake_fill)
+    tpl = {"subject": "{target_role} at {company}", "body": "Hi {first_name},\n[[hook: about {company}]]\n{my_name}"}
+    contact = {"name": "Cher", "title": "", "company": "Stripe"}
+    assert ai.draft(tpl, PROFILE, contact, None, []) == ("Product at Stripe", "Hi Cher,\nLoved your talk.\nAlex Lee")
+    assert seen == {"hook": "about Stripe"}
+
+
+def test_draft_without_slots_makes_no_ai_call(monkeypatch):
+    monkeypatch.setattr(ai, "fill_slots", lambda *a: pytest.fail("should not call Claude"))
+    tpl = {"subject": "Hi", "body": "Hi {first_name}"}
+    assert ai.draft(tpl, PROFILE, {"name": "Jane Doe"}, None, []) == ("Hi", "Hi Jane")
+
