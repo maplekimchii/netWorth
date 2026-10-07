@@ -7,17 +7,29 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<nav>
-  <strong>netWorth</strong>
-  {% for ep, label in [('today_page', 'Today'), ('contacts_page', 'Contacts'), ('companies_page', 'Companies'),
-                       ('find_page', 'Find'), ('applications_page', 'Applications'), ('templates_page', 'Templates'),
-                       ('profile_page', 'Profile'), ('import_page', 'Import/Export')] %}
-    <a href="{{ url_for(ep) }}" {% if request.endpoint == ep %}aria-current="page"{% endif %}>{{ label }}</a>
-  {% endfor %}
-</nav>
-<main>
-  {% for m in get_flashed_messages() %}<p class="flash" role="status">{{ m }}</p>{% endfor %}
-  {% block body %}{% endblock %}
-</main>
+<div class="layout">
+  <nav class="sidebar" aria-label="Main">
+    <div class="brand">net<span>Worth</span></div>
+    {% macro nav(ep, label, count=0) -%}
+      <a class="nav-link" href="{{ url_for(ep) }}" {% if request.endpoint == ep %}aria-current="page"{% endif %}>
+        {{ label }}{% if count %}<span class="count" aria-label="{{ count }} due">{{ count }}</span>{% endif %}</a>
+    {%- endmacro %}
+    {{ nav('today_page', 'Today', due_count) }}
+    {{ nav('contacts_page', 'Contacts') }}
+    {{ nav('find_page', 'Find people') }}
+    {{ nav('companies_page', 'Companies') }}
+    {{ nav('applications_page', 'Applications') }}
+    <div class="nav-group">Setup</div>
+    {{ nav('templates_page', 'Email templates') }}
+    {{ nav('profile_page', 'Profile') }}
+    {{ nav('import_page', 'Import / Export') }}
+  </nav>
+  <main class="main">
+    <div class="page {% block page_class %}{% endblock %}">
+      {% for m in get_flashed_messages() %}<div class="flash" role="status">{{ m }}</div>{% endfor %}
+      {% block body %}{% endblock %}
+    </div>
+  </main>
+</div>
 </body>
 </html>

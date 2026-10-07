@@ -1,40 +1,80 @@
 {% extends "base.html" %}
+{% block title %}Import / Export · netWorth{% endblock %}
+{% block page_class %}page-narrow{% endblock %}
 {% block body %}
-<h1>Import / Export</h1>
+<div class="page-head">
+  <div><h1>Import / Export</h1><p class="sub">Duplicates (same name at the same company) are skipped automatically.</p></div>
+</div>
+
 {% if stage == 'start' %}
-  <h2>LinkedIn connections</h2>
-  <p class="muted">LinkedIn → Settings → Data privacy → Get a copy of your data → Connections. Upload Connections.csv.</p>
-  <form method="post" action="{{ url_for('import_linkedin') }}" enctype="multipart/form-data" class="row">
-    <input type="file" name="file" accept=".csv" required aria-label="Connections.csv"><button class="primary">Import</button>
-  </form>
-  <h2>Any spreadsheet (e.g. PitchBook export)</h2>
-  <form method="post" action="{{ url_for('import_upload') }}" enctype="multipart/form-data" class="row">
-    <input type="file" name="file" accept=".xlsx,.csv" required aria-label="Spreadsheet"><button class="primary">Upload and map columns</button>
-  </form>
-  <h2>Export</h2>
-  <a href="{{ url_for('export') }}">Download everything as .xlsx</a>
+<div class="stack">
+  <section class="card">
+    <div class="card-head"><h2>LinkedIn connections</h2></div>
+    <form method="post" action="{{ url_for('import_linkedin') }}" enctype="multipart/form-data" class="card-body">
+      <p class="muted small">LinkedIn → Settings → Data privacy → Get a copy of your data → Connections. Upload the <code>Connections.csv</code> it emails you.</p>
+      <div class="row"><input type="file" name="file" accept=".csv" required aria-label="Connections.csv" style="flex:1; width:auto"><button class="btn btn-primary">Import</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Any spreadsheet</h2><span class="meta">e.g. a PitchBook export</span></div>
+    <form method="post" action="{{ url_for('import_upload') }}" enctype="multipart/form-data" class="card-body">
+      <p class="muted small">Upload an <code>.xlsx</code> or <code>.csv</code>. You'll match its columns to contact fields next; the mapping is remembered.</p>
+      <div class="row"><input type="file" name="file" accept=".xlsx,.csv" required aria-label="Spreadsheet" style="flex:1; width:auto"><button class="btn btn-primary">Upload</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Export</h2></div>
+    <div class="card-body row"><p class="muted small spacer">Everything in one <code>.xlsx</code>, one sheet per table.</p><a class="btn" href="{{ url_for('export') }}">Download .xlsx</a></div>
+  </section>
+</div>
+
 {% elif stage == 'map' %}
-  {% if sheets|length > 1 %}
-  <form method="get" class="row"><label>Sheet <select name="sheet" onchange="this.form.submit()">
-    {% for s in sheets %}<option {% if s == sheet %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label></form>
-  {% endif %}
+<section class="card">
+  <div class="card-head">
+    <h2>Match columns</h2>
+    {% if sheets|length > 1 %}
+    <form method="get" class="row"><label class="muted small" for="sheet">Sheet</label>
+      <select id="sheet" name="sheet" onchange="this.form.submit()" style="width:auto; height:28px">
+        {% for s in sheets %}<option {% if s == sheet %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></form>
+    {% endif %}
+  </div>
   <form method="post">
     <input type="hidden" name="sheet" value="{{ sheet }}">
-    <table>
-      <tr><th>Column</th><th>Maps to</th><th>First value</th></tr>
-      {% for h in headers %}
-      <tr><td>{{ h }}</td>
-        <td><select name="map_{{ loop.index0 }}" aria-label="Field for {{ h }}"><option value="">(skip)</option>
-          {% for f in fields %}<option {% if mapping.get(h) == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></td>
-        <td>{{ preview[0][h] if preview else '' }}</td></tr>
-      {% endfor %}
-    </table>
-    <p class="muted">Preview: {{ preview|length }} of the first rows shown above. Map "name", or both "first_name" and "last_name".</p>
-    <button class="primary">Import</button>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Column in file</th><th>Contact field</th><th>Example</th></tr></thead>
+        <tbody>
+        {% for h in headers %}
+          <tr>
+            <td class="name">{{ h }}</td>
+            <td><select name="map_{{ loop.index0 }}" aria-label="Field for {{ h }}" style="width:auto; min-width:160px"><option value="">Skip</option>
+              {% for f in fields %}<option value="{{ f }}" {% if mapping.get(h) == f %}selected{% endif %}>{{ f.replace('_', ' ') }}</option>{% endfor %}</select></td>
+            <td class="sub">{{ preview[0][h] if preview else '' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body row" style="border-top:1px solid var(--line-soft)">
+      <p class="muted small spacer">Map <b>name</b>, or both <b>first name</b> and <b>last name</b>.</p>
+      <a class="btn btn-ghost" href="{{ url_for('import_page') }}">Cancel</a>
+      <button class="btn btn-primary">Import</button>
+    </div>
   </form>
+</section>
+
 {% elif stage == 'report' %}
-  <p>Added {{ report.added }}. Skipped {{ report.skipped }} duplicates. Failed {{ report.failed|length }}.</p>
-  {% if report.failed %}<ul>{% for f in report.failed %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
-  <a href="{{ url_for('contacts_page') }}">See contacts</a> · <a href="{{ url_for('import_page') }}">Import more</a>
+<div class="stats" style="grid-template-columns:repeat(3, minmax(0, 1fr))">
+  <div class="stat"><div class="k">Added</div><div class="v">{{ report.added }}</div></div>
+  <div class="stat"><div class="k">Skipped (duplicates)</div><div class="v">{{ report.skipped }}</div></div>
+  <div class="stat {% if report.failed %}attn{% endif %}"><div class="k">Failed</div><div class="v">{{ report.failed|length }}</div></div>
+</div>
+{% if report.failed %}
+<section class="card" style="margin-bottom:20px"><div class="card-head"><h2>Rows that failed</h2></div>
+  <ul class="list">{% for f in report.failed %}<li class="small">{{ f }}</li>{% endfor %}</ul></section>
+{% endif %}
+<div class="row"><a class="btn btn-primary" href="{{ url_for('contacts_page') }}">See contacts</a><a class="btn" href="{{ url_for('import_page') }}">Import more</a></div>
 {% endif %}
 {% endblock %}

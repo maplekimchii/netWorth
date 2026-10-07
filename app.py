@@ -80,6 +80,21 @@ def guarded(fn, *args, **kwargs):
     return None
 
 
+@app.context_processor
+def nav_counts():
+    """Sidebar badge (follow-ups due) and today's date for every page."""
+    return {"due_count": db.stats(con(), dt.date.today())["due"], "today_iso": dt.date.today().isoformat()}
+
+
+@app.template_filter("nice_date")
+def nice_date(value):
+    """'2026-10-03...' -> 'Oct 3' this year, 'Oct 3, 2025' otherwise. Blank stays blank."""
+    if not value:
+        return ""
+    d = dt.date.fromisoformat(str(value)[:10])
+    return d.strftime("%b %-d") + ("" if d.year == dt.date.today().year else d.strftime(", %Y"))
+
+
 def companies():
     return con().execute("SELECT id, name FROM companies ORDER BY name").fetchall()
 
@@ -92,6 +107,7 @@ def today_page():
     if connected:
         guarded(outlook.sync, con())
     return render_template("today.html", view=db.today_view(con(), dt.date.today()),
+                           stats=db.stats(con(), dt.date.today()), today=dt.date.today(),
                            outlook_enabled=outlook.enabled(), connected=connected, login=outlook.login_state)
 
 
@@ -113,7 +129,7 @@ def outlook_connect():
 @app.get("/contacts")
 def contacts_page():
     a = request.args
-    rows = db.list_contacts(con(), a.get("status"), a.get("company_id", type=int), a.get("source"))
+    rows = db.list_contacts(con(), a.get("status"), a.get("company_id", type=int), a.get("source"), a.get("q"))
     return render_template("contacts.html", contacts=rows, companies=companies(), statuses=db.STATUSES,
                            sources=db.SOURCES, args=a)
 
@@ -247,8 +263,9 @@ def company_news(coid):
 # --- Find ---
 
 @app.get("/find")
-def find_page():
-    return render_template("find.html", results=last_search, parsed=None)
+def find_page(parsed=None):
+    results = [dict(p, i=i, saved=db.contact_exists(con(), p["name"], p["company"])) for i, p in enumerate(last_search)]
+    return render_template("find.html", results=results, parsed=parsed)
 
 
 @app.post("/find/search")
@@ -256,30 +273,30 @@ def find_search():
     company = request.form["company"].strip()
     people = guarded(ai.find_people, company, request.form.get("focus", ""), db.get_profile(con()))
     if people is not None:
-        last_search[:] = [dict(p, company=company, saved=False) for p in people]
+        last_search[:] = [dict(p, company=company) for p in people]
         if not people:
             flash("No people found. Try a broader focus.")
     return redirect(url_for("find_page"))
 
 
-@app.post("/find/save/<int:i>")
-def find_save(i):
-    if i >= len(last_search):
-        abort(404)
-    p = last_search[i]
-    notes = f"{p.get('why_relevant') or ''}\nSource: {p.get('source_url') or ''}".strip()
-    cid = db.add_contact(con(), p["name"], "ai_search", company=p["company"], title=p.get("title") or "",
-                         linkedin_url=p.get("linkedin_url") or "", notes=notes)
-    p["saved"] = True
-    if cid is None:
-        flash(f"{p['name']} is already saved.")
+@app.post("/find/add")
+def find_add():
+    added = skipped = 0
+    for i in request.form.getlist("pick", type=int):
+        if not 0 <= i < len(last_search):
+            continue
+        p = last_search[i]
+        notes = f"{p.get('why_relevant') or ''}\nSource: {p.get('source_url') or ''}".strip()
+        cid = db.add_contact(con(), p["name"], "ai_search", company=p["company"], title=p.get("title") or "",
+                             linkedin_url=p.get("linkedin_url") or "", notes=notes)
+        added, skipped = (added + 1, skipped) if cid else (added, skipped + 1)
+    flash(f"Added {added} to contacts" + (f", {skipped} already saved." if skipped else "."))
     return redirect(url_for("find_page"))
 
 
 @app.post("/find/parse")
 def find_parse():
-    parsed = guarded(ai.parse_profile, request.form["text"])
-    return render_template("find.html", results=last_search, parsed=parsed)
+    return find_page(parsed=guarded(ai.parse_profile, request.form["text"]))
 
 
 # --- Applications ---

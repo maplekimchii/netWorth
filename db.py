@@ -105,6 +105,20 @@ def get_or_create_company(con, name):
     return con.execute("INSERT INTO companies (name) VALUES (?)", (name,)).lastrowid
 
 
+def _is_dup(con, name, company_id):
+    return con.execute("SELECT 1 FROM contacts WHERE name = ? COLLATE NOCASE AND company_id IS ?",
+                       (clean_name(name), company_id)).fetchone() is not None
+
+
+def contact_exists(con, name, company=""):
+    """Same duplicate rule as add_contact, without creating the company."""
+    company = clean_name(company)
+    row = con.execute("SELECT id FROM companies WHERE name = ?", (company,)).fetchone() if company else None
+    if company and row is None:
+        return False
+    return _is_dup(con, name, row["id"] if row else None)
+
+
 CONTACT_FIELDS = ("title", "email", "linkedin_url", "how_connected", "notes")
 
 
@@ -113,9 +127,7 @@ def add_contact(con, name, source, company="", **fields):
     if not name:
         raise ValueError("A contact needs a name.")
     company_id = get_or_create_company(con, company)
-    dup = con.execute("SELECT 1 FROM contacts WHERE name = ? COLLATE NOCASE AND company_id IS ?",
-                      (name, company_id)).fetchone()
-    if dup:
+    if _is_dup(con, name, company_id):
         return None
     values = {k: (fields.get(k) or "").strip() for k in CONTACT_FIELDS}
     cols = ["name", "source", "company_id", *values]
@@ -135,9 +147,12 @@ def get_contact(con, contact_id):
                        "LEFT JOIN companies co ON co.id = c.company_id WHERE c.id = ?", (contact_id,)).fetchone()
 
 
-def list_contacts(con, status=None, company_id=None, source=None):
+def list_contacts(con, status=None, company_id=None, source=None, q=None):
     sql = "SELECT c.*, co.name AS company FROM contacts c LEFT JOIN companies co ON co.id = c.company_id WHERE 1 = 1"
     args = []
+    if q and q.strip():
+        sql += " AND (c.name LIKE ? OR c.title LIKE ? OR co.name LIKE ?)"
+        args += [f"%{q.strip()}%"] * 3
     for col, val in (("c.status", status), ("c.company_id", company_id), ("c.source", source)):
         if val:
             sql += f" AND {col} = ?"
@@ -215,9 +230,11 @@ def today_view(con, today):
     def days_ago(n):
         return (today - dt.timedelta(days=n)).isoformat()
 
-    due = con.execute("SELECT c.*, co.name AS company FROM contacts c LEFT JOIN companies co ON co.id = c.company_id "
+    due = con.execute("SELECT c.*, co.name AS company, "
+                      "CAST(julianday(?) - julianday(c.next_followup_date) AS INTEGER) AS days_late "
+                      "FROM contacts c LEFT JOIN companies co ON co.id = c.company_id "
                       "WHERE c.status = 'sent' AND c.next_followup_date <= ? ORDER BY c.next_followup_date",
-                      (today.isoformat(),)).fetchall()
+                      (today.isoformat(), today.isoformat())).fetchall()
     unsent = con.execute("SELECT m.id, m.subject, m.created_at, c.id AS contact_id, c.name FROM messages m "
                          "JOIN contacts c ON c.id = m.contact_id "
                          "WHERE m.sent_at IS NULL AND c.status = 'drafted' AND date(m.created_at) <= ? "
@@ -226,3 +243,19 @@ def today_view(con, today):
                         "WHERE a.status IN ('planned', 'applied', 'interview') AND date(a.updated_at) <= ? "
                         "ORDER BY a.updated_at", (days_ago(14),)).fetchall()
     return {"due": due, "unsent": unsent, "stale_apps": stale}
+
+
+def stats(con, today):
+    """Numbers for the Today tiles. reply_rate is a whole percent over the last 30 days, or None with no sends."""
+    def since(n):
+        return (today - dt.timedelta(days=n)).isoformat()
+
+    sent, replied = con.execute("SELECT COUNT(*), COUNT(replied_at) FROM messages WHERE date(sent_at) >= ?",
+                                (since(29),)).fetchone()
+    return {
+        "due": con.execute("SELECT COUNT(*) FROM contacts WHERE status = 'sent' AND next_followup_date <= ?",
+                           (today.isoformat(),)).fetchone()[0],
+        "sent_week": con.execute("SELECT COUNT(*) FROM messages WHERE date(sent_at) >= ?", (since(6),)).fetchone()[0],
+        "reply_rate": round(100 * replied / sent) if sent else None,
+        "calls": con.execute("SELECT COUNT(*) FROM contacts WHERE status = 'call'").fetchone()[0],
+    }

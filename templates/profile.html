@@ -1,15 +1,37 @@
 {% extends "base.html" %}
+{% block title %}Profile · netWorth{% endblock %}
+{% block page_class %}page-narrow{% endblock %}
 {% block body %}
-<h1>Profile</h1>
-<p class="muted">The AI uses this for every draft.</p>
-<form method="post">
-  <label>Your name <input name="name" value="{{ p.name }}"></label>
-  <label>Program (e.g. "Computer Science") <input name="program" value="{{ p.program }}"></label>
-  <label>Target roles, comma separated (the first one fills {target_role}) <input name="target_roles" value="{{ p.target_roles }}"></label>
-  <label>Your story (2-4 sentences) <textarea name="story" rows="4">{{ p.story }}</textarea></label>
-  <label>Resume (paste text) <textarea name="resume_text" rows="10">{{ p.resume_text }}</textarea></label>
-  <label>Voice samples: 1-2 emails you wrote yourself <textarea name="voice_samples" rows="10">{{ p.voice_samples }}</textarea></label>
-  <label>Days before a follow-up is due <input name="followup_days" type="number" min="1" value="{{ p.followup_days }}"></label>
-  <button class="primary">Save</button>
+<div class="page-head">
+  <div><h1>Profile</h1><p class="sub">The AI uses this for every draft. The more specific, the better the emails.</p></div>
+</div>
+
+<form method="post" class="stack">
+  <section class="card">
+    <div class="card-head"><h2>About you</h2></div>
+    <div class="card-body form-grid">
+      <label class="field"><span>Your name</span><input name="name" value="{{ p.name }}"></label>
+      <label class="field"><span>Program</span><input name="program" value="{{ p.program }}" placeholder="e.g. Computer Science"></label>
+      <label class="field full"><span>Target roles <span class="hint">comma separated; the first fills {target_role}</span></span><input name="target_roles" value="{{ p.target_roles }}" placeholder="Product Manager, Software Engineer"></label>
+      <label class="field full"><span>Your story <span class="hint">2–4 sentences</span></span><textarea name="story" rows="4">{{ p.story }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Writing material</h2></div>
+    <div class="card-body">
+      <label class="field"><span>Voice samples <span class="hint">1–2 emails you wrote yourself; the AI copies their tone</span></span><textarea name="voice_samples" rows="8">{{ p.voice_samples }}</textarea></label>
+      <label class="field"><span>Resume <span class="hint">paste as text</span></span><textarea name="resume_text" rows="10">{{ p.resume_text }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Follow-ups</h2></div>
+    <div class="card-body form-grid">
+      <label class="field"><span>Days before a follow-up is due</span><input name="followup_days" type="number" min="1" value="{{ p.followup_days }}"></label>
+    </div>
+  </section>
+
+  <div class="form-actions" style="margin-top:0"><button class="btn btn-primary">Save profile</button></div>
 </form>
 {% endblock %}

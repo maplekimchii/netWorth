@@ -1,56 +1,104 @@
 {% extends "base.html" %}
+{% from "_ui.html" import pill, status_select %}
 {% block title %}{{ c.name }} · netWorth{% endblock %}
 {% block body %}
-<h1>{{ c.name }}</h1>
-<p class="muted">{{ c.title }}{% if c.company %} at <a href="{{ url_for('company_page', coid=c.company_id) }}">{{ c.company }}</a>{% endif %}
-  · source: {{ c.source }}{% if c.linkedin_url %} · <a href="{{ c.linkedin_url|safe_url }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}</p>
-{% if not c.email %}<p class="flash">No email on file. Add one below, or add the recipient in Outlook.</p>{% endif %}
-
-<form method="post" action="{{ url_for('contact_status', cid=c.id) }}" class="row">
-  <label>Status <select name="status">
-    {% for s in statuses %}<option {% if c.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-  <button>Change status</button>
-  {% if c.next_followup_date %}<span class="muted">Follow up on {{ c.next_followup_date }}</span>{% endif %}
-</form>
-
-<h2 id="draft">Draft an email</h2>
-<form method="post" action="{{ url_for('contact_draft', cid=c.id) }}" class="row">
-  <label>Template <select name="template_id">
-    {% for t in templates %}<option value="{{ t.id }}">{{ t.kind }}: {{ t.name }}</option>{% endfor %}</select></label>
-  <button class="primary">Draft with AI</button>
-</form>
-{% if draft %}
-  {% if draft.unfilled %}<p class="flash">Not filled in yet: {{ draft.unfilled|join(', ') }}</p>{% endif %}
-  <form method="post" action="{{ url_for('contact_save_draft', cid=c.id) }}" class="card">
-    <input type="hidden" name="kind" value="{{ draft.kind }}">
-    <label>Subject <input name="subject" value="{{ draft.subject }}"></label>
-    <label>Body <textarea name="body" rows="14">{{ draft.body }}</textarea></label>
-    {% if outlook_enabled %}<button class="primary" name="action" value="outlook">Create Outlook draft</button>{% endif %}
-    <button name="action" value="local">Save here (open in Outlook yourself)</button>
-  </form>
-{% endif %}
-
-<h2>Emails</h2>
-{% for m in messages %}
-  <div class="card">
-    <strong>{{ m.subject }}</strong> <span class="muted">({{ m.kind }}, drafted {{ m.created_at[:10] }}
-      {%- if m.sent_at %}, sent {{ m.sent_at[:10] }}{% endif %}{% if m.replied_at %}, replied {{ m.replied_at[:10] }}{% endif %})</span>
-    <pre>{{ m.body }}</pre>
-    {% if not m.outlook_message_id %}<a href="{{ mailto(c.email, m.subject, m.body) }}">Open in Outlook</a>{% endif %}
-    {% if not m.sent_at %}<form class="inline" method="post" action="{{ url_for('message_sent', mid=m.id) }}"><button>Mark sent</button></form>{% endif %}
-    {% if not m.replied_at %}<form class="inline" method="post" action="{{ url_for('message_replied', mid=m.id) }}"><button>Mark replied</button></form>{% endif %}
+<div class="page-head">
+  <div>
+    <div class="row"><h1>{{ c.name }}</h1>{{ pill(c.status) }}</div>
+    <p class="sub">
+      {{ c.title or 'Title unknown' }}{% if c.company %} · <a href="{{ url_for('company_page', coid=c.company_id) }}">{{ c.company }}</a>{% endif %}
+      {% if c.next_followup_date %} · follow up {{ c.next_followup_date|nice_date }}{% endif %}
+    </p>
   </div>
-{% else %}<p class="muted">No emails yet.</p>{% endfor %}
+  <a class="btn btn-ghost" href="{{ url_for('contacts_page') }}">All contacts</a>
+</div>
 
-<h2>Details</h2>
-<form method="post" action="{{ url_for('contact_update', cid=c.id) }}">
-  <label>Name <input name="name" value="{{ c.name }}" required></label>
-  <label>Company <input name="company" value="{{ c.company or '' }}"></label>
-  <label>Title <input name="title" value="{{ c.title }}"></label>
-  <label>Email <input name="email" type="email" value="{{ c.email }}"></label>
-  <label>LinkedIn URL <input name="linkedin_url" value="{{ c.linkedin_url }}"></label>
-  <label>How connected <input name="how_connected" value="{{ c.how_connected }}"></label>
-  <label>Notes <textarea name="notes" rows="4">{{ c.notes }}</textarea></label>
-  <button class="primary">Save</button>
-</form>
+<div class="two-col">
+  <div class="stack">
+    <section class="card" id="draft" aria-labelledby="draft-h">
+      <div class="card-head"><h2 id="draft-h">Draft an email</h2></div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('contact_draft', cid=c.id) }}" class="row">
+          {# Preselect a follow-up template once there is already an email to this person. #}
+          {% set preferred = (templates|selectattr('kind', 'equalto', 'followup' if messages else 'initial')|first) %}
+          <select name="template_id" aria-label="Template" style="flex:1; width:auto">
+            {% for t in templates %}<option value="{{ t.id }}" {% if preferred and t.id == preferred.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-primary">Draft with AI</button>
+        </form>
+        {% if draft %}
+          {% if draft.unfilled %}<p class="note">Not filled in yet: {{ draft.unfilled|join(', ') }}</p>{% endif %}
+          <form method="post" action="{{ url_for('contact_save_draft', cid=c.id) }}" class="stack" style="gap:12px">
+            <input type="hidden" name="kind" value="{{ draft.kind }}">
+            <label class="field"><span>Subject</span><input name="subject" value="{{ draft.subject }}"></label>
+            <label class="field"><span>Body</span><textarea name="body" rows="14">{{ draft.body }}</textarea></label>
+            <div class="row" style="justify-content:flex-end">
+              <button class="btn" name="action" value="local">Save here</button>
+              {% if outlook_enabled %}<button class="btn btn-primary" name="action" value="outlook">Create Outlook draft</button>{% endif %}
+            </div>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="hist-h">
+      <div class="card-head"><h2 id="hist-h">Email history</h2><span class="meta">{{ messages|length }}</span></div>
+      {% if messages %}
+      <ol class="timeline">
+        {% for m in messages|reverse %}
+        <li class="{{ 'replied' if m.replied_at else 'sent' if m.sent_at else '' }}">
+          <div class="title">{{ m.subject }}</div>
+          <div class="when">
+            {{ 'Follow-up' if m.kind == 'followup' else 'First email' }} · drafted {{ m.created_at|nice_date }}
+            {%- if m.sent_at %} · sent {{ m.sent_at|nice_date }}{% else %} · not sent{% endif %}
+            {%- if m.replied_at %} · replied {{ m.replied_at|nice_date }}{% endif %}
+          </div>
+          <details><summary>Show email</summary><pre>{{ m.body }}</pre></details>
+          {% if not m.sent_at or (loop.first and not m.replied_at) %}
+          <div class="row actions">
+            {% if not m.outlook_message_id and not m.sent_at %}<a class="btn btn-sm" href="{{ mailto(c.email, m.subject, m.body) }}">Open in Outlook</a>{% endif %}
+            {% if not m.sent_at %}<form class="inline" method="post" action="{{ url_for('message_sent', mid=m.id) }}"><button class="btn btn-sm">Mark sent</button></form>{% endif %}
+            {% if not m.replied_at and loop.first %}<form class="inline" method="post" action="{{ url_for('message_replied', mid=m.id) }}"><button class="btn btn-sm">Mark replied</button></form>{% endif %}
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}<p class="empty">No emails yet. Draft the first one above.</p>{% endif %}
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card" aria-labelledby="status-h">
+      <div class="card-head"><h2 id="status-h">Status</h2>{{ status_select(url_for('contact_status', cid=c.id), c.status, statuses, 'Status') }}</div>
+      {% if not c.email %}<div class="card-body"><p class="note">No email on file. Add one in Details, or add the recipient in Outlook.</p></div>{% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="details-h">
+      <div class="card-head"><h2 id="details-h">Details</h2></div>
+      <div class="card-body">
+        <details class="edit">
+          <summary class="btn btn-sm">Edit details</summary>
+          <form method="post" action="{{ url_for('contact_update', cid=c.id) }}" class="stack" style="gap:10px; margin-top:12px">
+            <label class="field"><span>Name</span><input name="name" value="{{ c.name }}" required></label>
+            <label class="field"><span>Company</span><input name="company" value="{{ c.company or '' }}"></label>
+            <label class="field"><span>Title</span><input name="title" value="{{ c.title }}"></label>
+            <label class="field"><span>Email</span><input name="email" type="email" value="{{ c.email }}"></label>
+            <label class="field"><span>LinkedIn URL</span><input name="linkedin_url" value="{{ c.linkedin_url }}"></label>
+            <label class="field"><span>How connected</span><input name="how_connected" value="{{ c.how_connected }}"></label>
+            <label class="field"><span>Notes</span><textarea name="notes" rows="4">{{ c.notes }}</textarea></label>
+            <div class="row" style="justify-content:flex-end"><button class="btn btn-primary">Save</button></div>
+          </form>
+        </details>
+        <dl class="kv">
+          <div><dt>Email</dt><dd>{% if c.email %}{{ c.email }}{% else %}<span class="muted">None</span>{% endif %}</dd></div>
+          <div><dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url|safe_url }}" target="_blank" rel="noopener">{{ c.linkedin_url.replace('https://', '').replace('www.', '') }}</a>{% else %}<span class="muted">None</span>{% endif %}</dd></div>
+          <div><dt>How connected</dt><dd>{{ c.how_connected or '—' }}</dd></div>
+          <div><dt>Source</dt><dd>{{ c.source.replace('_', ' ') }}</dd></div>
+          <div><dt>Notes</dt><dd><pre>{{ c.notes or '—' }}</pre></dd></div>
+        </dl>
+      </div>
+    </section>
+  </div>
+</div>
 {% endblock %}

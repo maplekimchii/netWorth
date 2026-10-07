@@ -362,3 +362,89 @@ def test_safe_url_blocks_script_links():
     assert f(" JaVaScRiPt:alert(1)") == "#"
     assert f("https://www.linkedin.com/in/x") == "https://www.linkedin.com/in/x"
     assert f("") == "#"
+
+
+# --- UX pass ---
+
+def test_stats(con):
+    today = dt.date(2026, 10, 10)
+    a, _ = sent_contact(con, sent="2026-10-08T09:00:00Z")        # sent this week, due 10-13
+    b = db.add_contact(con, "Ann Lee", "paste", company="Figma")
+    mb = db.record_draft(con, b, "initial", "Hi", "Body")
+    db.mark_sent(con, mb, "2026-09-20T09:00:00Z")                   # sent 20 days ago, due 09-25
+    db.mark_replied(con, mb, "2026-09-21T09:00:00Z")
+    c = db.add_contact(con, "Sam Wu", "paste")
+    mc = db.record_draft(con, c, "initial", "Hi", "Body")
+    db.mark_sent(con, mc, "2026-10-01T09:00:00Z")                   # due 10-06, overdue
+    db.set_status(con, b, "call")
+    s = db.stats(con, today)
+    assert s == {"due": 1, "sent_week": 1, "reply_rate": 33, "calls": 1}
+
+
+def test_stats_without_sends_has_no_reply_rate(con):
+    assert db.stats(con, dt.date(2026, 10, 10))["reply_rate"] is None
+
+
+def test_contact_exists_uses_duplicate_rule(con):
+    db.add_contact(con, "Jane Doe", "paste", company="Stripe")
+    assert db.contact_exists(con, " jane  doe", "STRIPE")
+    assert not db.contact_exists(con, "Jane Doe", "Figma")
+    assert not db.contact_exists(con, "Jane Doe", "New Co")  # does not create the company as a side effect
+    assert con.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 1
+
+
+def test_list_contacts_search(con):
+    db.add_contact(con, "Jane Doe", "paste", company="Stripe", title="Product Manager")
+    db.add_contact(con, "Ann Lee", "paste", company="Figma", title="Recruiter")
+    names = lambda q: [r["name"] for r in db.list_contacts(con, q=q)]
+    assert names("jane") == ["Jane Doe"]
+    assert names("figma") == ["Ann Lee"]
+    assert names("product") == ["Jane Doe"]
+    assert names("") == ["Ann Lee", "Jane Doe"]
+
+
+def webclient(tmp_path, monkeypatch):
+    import app as webapp
+    monkeypatch.setattr(outlook, "enabled", lambda: False)
+    webapp.app.config["DB_PATH"] = tmp_path / "web.db"
+    return webapp, webapp.app.test_client()
+
+
+def test_find_add_saves_only_checked_and_reports(tmp_path, monkeypatch):
+    webapp, client = webclient(tmp_path, monkeypatch)
+    client.post("/contacts", data={"name": "Lia Chen", "company": "Stripe", "source": "paste"})
+    webapp.last_search[:] = [
+        {"name": "Jane Doe", "title": "PM", "company": "Stripe", "why_relevant": "alum", "source_url": "https://x"},
+        {"name": "Tom Roe", "title": "VP", "company": "Stripe"},
+        {"name": "Lia Chen", "title": "Eng", "company": "Stripe"},
+    ]
+    r = client.post("/find/add", data={"pick": ["0", "2"]}, follow_redirects=True)
+    assert b"Added 1" in r.data and b"1 already saved" in r.data
+    con = db.connect(tmp_path / "web.db")
+    assert sorted(x["name"] for x in db.list_contacts(con)) == ["Jane Doe", "Lia Chen"]
+    assert db.list_contacts(con, source="ai_search")[0]["notes"].startswith("alum")
+
+
+def test_find_page_marks_already_saved_results(tmp_path, monkeypatch):
+    webapp, client = webclient(tmp_path, monkeypatch)
+    client.post("/contacts", data={"name": "Lia Chen", "company": "Stripe", "source": "paste"})
+    webapp.last_search[:] = [{"name": "Lia Chen", "title": "Eng", "company": "Stripe"},
+                             {"name": "Jane Doe", "title": "PM", "company": "Stripe"}]
+    page = client.get("/find").data.decode()
+    assert 'aria-label="Lia Chen already saved"' in page and 'Jane Doe already saved' not in page
+    assert page.count('name="pick" value=') == 1
+
+
+def test_today_shows_stats_and_sidebar_due_count(tmp_path, monkeypatch):
+    webapp, client = webclient(tmp_path, monkeypatch)
+    page = client.get("/").data.decode()
+    assert "Sent (7 days)" in page and "Reply rate" in page and 'class="sidebar"' in page
+
+
+def test_nice_date():
+    import app as webapp
+    f = webapp.app.jinja_env.filters["nice_date"]
+    this_year = dt.date.today().year
+    assert f(f"{this_year}-10-03T15:00:00Z") == "Oct 3"
+    assert f("2019-01-09 10:00:00") == "Jan 9, 2019"
+    assert f(None) == "" and f("") == ""
