@@ -3,8 +3,10 @@ import datetime as dt
 import io
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import anthropic
+import requests
 from dotenv import load_dotenv
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
@@ -23,6 +25,25 @@ UPLOAD_DIR = Path(__file__).with_name("uploads")
 PROFILE_FIELDS = ("name", "program", "resume_text", "story", "target_roles", "voice_samples", "followup_days")
 # ponytail: single-user app, so the last AI search lives in memory until the next search or restart.
 last_search = []
+
+
+@app.before_request
+def same_origin_only():
+    """Block other websites from posting to this unauthenticated local app (spending API credits, planting drafts)."""
+    if request.method != "POST":
+        return None
+    site = request.headers.get("Sec-Fetch-Site")
+    origin = request.headers.get("Origin")
+    if (site and site not in ("same-origin", "none")) or (origin and urlparse(origin).netloc != request.host):
+        abort(403)
+    return None
+
+
+@app.template_filter("safe_url")
+def safe_url(url):
+    """Only http(s) links reach an href; AI- or import-supplied javascript: URLs become '#'."""
+    url = (url or "").strip()
+    return url if url.lower().startswith(("http://", "https://")) else "#"
 
 
 def con():
@@ -54,7 +75,7 @@ def guarded(fn, *args, **kwargs):
         return fn(*args, **kwargs)
     except outlook.NotConnected:
         flash("Outlook is not connected. Use 'Connect Outlook' on the Today page.")
-    except (ai.AIError, anthropic.APIError, outlook.OutlookError) as e:
+    except (ai.AIError, anthropic.APIError, outlook.OutlookError, requests.RequestException) as e:
         flash(f"Error: {e}")
     return None
 

@@ -3,7 +3,7 @@
 {% block body %}
 <h1>{{ c.name }}</h1>
 <p class="muted">{{ c.title }}{% if c.company %} at <a href="{{ url_for('company_page', coid=c.company_id) }}">{{ c.company }}</a>{% endif %}
-  · source: {{ c.source }}{% if c.linkedin_url %} · <a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}</p>
+  · source: {{ c.source }}{% if c.linkedin_url %} · <a href="{{ c.linkedin_url|safe_url }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}</p>
 {% if not c.email %}<p class="flash">No email on file. Add one below, or add the recipient in Outlook.</p>{% endif %}
 
 <form method="post" action="{{ url_for('contact_status', cid=c.id) }}" class="row">

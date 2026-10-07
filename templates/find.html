@@ -11,8 +11,8 @@
   <div class="card">
     <strong>{{ p.name }}</strong> · {{ p.title }} at {{ p.company }}
     <p>{{ p.why_relevant }}</p>
-    {% if p.source_url %}<a href="{{ p.source_url }}" target="_blank" rel="noopener">Source</a>{% endif %}
-    {% if p.linkedin_url %} · <a href="{{ p.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}
+    {% if p.source_url %}<a href="{{ p.source_url|safe_url }}" target="_blank" rel="noopener">Source</a>{% endif %}
+    {% if p.linkedin_url %} · <a href="{{ p.linkedin_url|safe_url }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}
     {% if p.saved %}<span class="muted"> · Saved</span>{% else %}
       <form class="inline" method="post" action="{{ url_for('find_save', i=loop.index0) }}"><button>Save</button></form>{% endif %}
   </div>

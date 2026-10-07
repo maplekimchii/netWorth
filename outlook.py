@@ -11,7 +11,7 @@ import requests
 import db
 
 GRAPH = "https://graph.microsoft.com/v1.0"
-SCOPES = ["Mail.ReadWrite"]  # MSAL adds offline_access itself. Never add Mail.Send.
+SCOPES = ["Mail.ReadWrite", "User.Read"]  # MSAL adds offline_access itself. Never add Mail.Send.
 CACHE_PATH = Path(__file__).with_name(".token_cache.json")
 SYNC_EVERY = dt.timedelta(minutes=10)
 
@@ -53,7 +53,12 @@ def _save_cache():
 
 
 def is_connected():
-    return bool(_msal().get_accounts())
+    """True only when a token can actually be obtained, so a revoked login shows the Connect button again."""
+    try:
+        _token()
+        return True
+    except OutlookError:
+        return False
 
 
 def start_login():
@@ -82,7 +87,11 @@ def _token():
 
 
 def _graph(method, path, **kwargs):
-    r = requests.request(method, GRAPH + path, headers={"Authorization": "Bearer " + _token()}, timeout=30, **kwargs)
+    try:
+        r = requests.request(method, GRAPH + path, headers={"Authorization": "Bearer " + _token()},
+                             timeout=30, **kwargs)
+    except requests.RequestException as e:
+        raise OutlookError(f"Could not reach Outlook: {e}") from e
     if r.status_code == 401:
         raise NotConnected("Outlook login expired.")
     if not r.ok:
@@ -104,11 +113,13 @@ def mailto_link(to, subject, body):
     return f"mailto:{quote(to or '')}?" + urlencode({"subject": subject, "body": body}, quote_via=quote)
 
 
-def _my_address():
+def _my_addresses():
+    """Every address my own sent mail can come from: primary, sign-in name, and all aliases."""
     global _me
     if not _me:
-        m = _graph("GET", "/me", params={"$select": "mail,userPrincipalName"})
-        _me = (m.get("mail") or m["userPrincipalName"]).lower()
+        m = _graph("GET", "/me", params={"$select": "mail,userPrincipalName,proxyAddresses"})
+        aliases = [a.split(":", 1)[-1] for a in m.get("proxyAddresses") or []]
+        _me = {a.lower() for a in [m.get("mail"), m.get("userPrincipalName"), *aliases] if a}
     return _me
 
 
@@ -120,16 +131,16 @@ def _conversation(conversation_id):
 
 
 def classify(msgs, me, since):
-    """Earliest send by me and earliest reply by anyone else, counting only mail at or after `since`."""
+    """Earliest send by me (a set of my addresses) and earliest reply by anyone else, at or after `since`."""
     since = since.replace(" ", "T")[:19]
 
     def sender(m):
         return ((m.get("from") or {}).get("emailAddress") or {}).get("address", "").lower()
 
     sent = [m["sentDateTime"] for m in msgs
-            if not m["isDraft"] and sender(m) == me and m["sentDateTime"][:19] >= since]
+            if not m["isDraft"] and sender(m) in me and m["sentDateTime"][:19] >= since]
     replies = [m["receivedDateTime"] for m in msgs
-               if not m["isDraft"] and sender(m) != me and m["receivedDateTime"][:19] >= since]
+               if not m["isDraft"] and sender(m) not in me and m["receivedDateTime"][:19] >= since]
     return (min(sent) if sent else None), (min(replies) if replies else None)
 
 
@@ -139,9 +150,12 @@ def sync(con, force=False):
     if not force and _last_sync and now - _last_sync < SYNC_EVERY:
         return False
     _last_sync = now
-    me = _my_address()
-    rows = con.execute("SELECT id, outlook_conversation_id, created_at, sent_at FROM messages "
-                       "WHERE outlook_conversation_id IS NOT NULL AND replied_at IS NULL").fetchall()
+    me = _my_addresses()
+    # Only contacts automation may still move; manual call/done/dead/replied are never polled.
+    rows = con.execute("SELECT m.id, m.outlook_conversation_id, m.created_at, m.sent_at FROM messages m "
+                       "JOIN contacts c ON c.id = m.contact_id "
+                       "WHERE m.outlook_conversation_id IS NOT NULL AND m.replied_at IS NULL "
+                       f"AND c.status IN {db.OPEN}").fetchall()
     for row in rows:
         sent_at, replied_at = classify(_conversation(row["outlook_conversation_id"]), me, row["created_at"])
         if sent_at and not row["sent_at"]:

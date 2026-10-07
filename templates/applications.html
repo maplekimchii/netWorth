@@ -14,7 +14,7 @@
   {% for a in apps %}
   <tr>
     <td>{{ a.company }}</td>
-    <td>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.role }}</a>{% else %}{{ a.role }}{% endif %}</td>
+    <td>{% if a.url %}<a href="{{ a.url|safe_url }}" target="_blank" rel="noopener">{{ a.role }}</a>{% else %}{{ a.role }}{% endif %}</td>
     <td>{{ a.applied_date or '' }}</td>
     <td><form method="post" action="{{ url_for('application_update', aid=a.id) }}" class="row">
       <select name="status" aria-label="Status">{% for s in app_statuses %}<option {% if a.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>

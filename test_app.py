@@ -220,8 +220,8 @@ def graph_msg(addr, when, draft=False):
 
 
 def test_classify_conversation():
-    me = "me@uwaterloo.ca"
-    assert outlook.classify([graph_msg(me, "2026-10-01T09:00:00Z", draft=True)], me, "2026-10-01 08:00:00") == (None, None)
+    me = {"me@uwaterloo.ca"}
+    assert outlook.classify([graph_msg("me@uwaterloo.ca", "2026-10-01T09:00:00Z", draft=True)], me, "2026-10-01 08:00:00") == (None, None)
     convo = [graph_msg("Me@UWaterloo.ca", "2026-10-01T09:00:00Z"), graph_msg("jane@stripe.com", "2026-10-02T10:00:00Z")]
     assert outlook.classify(convo, me, "2026-10-01 08:00:00") == ("2026-10-01T09:00:00Z", "2026-10-02T10:00:00Z")
     # A follow-up drafted later in the same thread ignores the earlier send and reply.
@@ -265,3 +265,90 @@ def test_missing_api_key_becomes_readable_ai_error(monkeypatch):
     monkeypatch.setattr(ai, "client", lambda: NoAuth)
     with pytest.raises(ai.AIError, match="ANTHROPIC_API_KEY"):
         ai.ask_json("system", "prompt")
+
+
+# --- final review fixes ---
+
+def test_classify_treats_any_own_alias_as_mine():
+    me = {"s2kim@uwaterloo.ca", "sean.kim@uwaterloo.ca"}
+    convo = [graph_msg("Sean.Kim@uwaterloo.ca", "2026-10-01T09:00:00Z")]
+    assert outlook.classify(convo, me, "2026-10-01 08:00:00") == ("2026-10-01T09:00:00Z", None)
+
+
+def test_my_addresses_include_proxy_aliases(monkeypatch):
+    monkeypatch.setattr(outlook, "_me", None)
+    monkeypatch.setattr(outlook, "_graph", lambda *a, **k: {
+        "mail": "Sean.Kim@uwaterloo.ca", "userPrincipalName": "s2kim@uwaterloo.ca",
+        "proxyAddresses": ["SMTP:sean.kim@uwaterloo.ca", "smtp:s2kim@edu.uwaterloo.ca"]})
+    assert outlook._my_addresses() == {"sean.kim@uwaterloo.ca", "s2kim@uwaterloo.ca", "s2kim@edu.uwaterloo.ca"}
+
+
+def test_is_connected_false_when_token_cannot_refresh(monkeypatch):
+    class FakeMsal:
+        def get_accounts(self):
+            return [{"username": "me"}]
+
+        def acquire_token_silent(self, scopes, account):
+            return {"error": "invalid_grant"}
+
+    monkeypatch.setattr(outlook, "_msal", lambda: FakeMsal())
+    assert outlook.is_connected() is False
+
+
+def test_network_failure_becomes_outlook_error(monkeypatch):
+    import requests
+
+    def offline(*a, **k):
+        raise requests.ConnectionError("no network")
+
+    monkeypatch.setattr(outlook, "_token", lambda: "t")
+    monkeypatch.setattr(outlook.requests, "request", offline)
+    with pytest.raises(outlook.OutlookError):
+        outlook._graph("GET", "/me")
+
+
+def test_sync_only_polls_open_contacts_and_applies_results(con, monkeypatch):
+    live = db.add_contact(con, "Jane Doe", "paste", company="Stripe")
+    gone = db.add_contact(con, "Bob Roe", "paste", company="Stripe")
+    m1 = db.record_draft(con, live, "initial", "Hi", "Body", "id1", "conv1")
+    db.record_draft(con, gone, "initial", "Hi", "Body", "id2", "conv2")
+    db.set_status(con, gone, "dead")
+    con.execute("UPDATE messages SET created_at = '2026-10-01 08:00:00'")
+    polled = []
+
+    def fake_conversation(cid):
+        polled.append(cid)
+        return [graph_msg("me@uwaterloo.ca", "2026-10-01T09:00:00Z"),
+                graph_msg("jane@stripe.com", "2026-10-02T10:00:00Z")]
+
+    monkeypatch.setattr(outlook, "_conversation", fake_conversation)
+    monkeypatch.setattr(outlook, "_my_addresses", lambda: {"me@uwaterloo.ca"})
+    assert outlook.sync(con, force=True) is True
+    assert polled == ["conv1"]
+    msg = con.execute("SELECT sent_at, replied_at FROM messages WHERE id = ?", (m1,)).fetchone()
+    assert (msg["sent_at"], msg["replied_at"]) == ("2026-10-01T09:00:00Z", "2026-10-02T10:00:00Z")
+    assert db.get_contact(con, live)["status"] == "replied"
+
+
+def test_scopes_can_read_profile_but_never_send():
+    assert "User.Read" in outlook.SCOPES and "Mail.Send" not in outlook.SCOPES
+
+
+def test_cross_site_posts_are_rejected(tmp_path, monkeypatch):
+    import app as webapp
+    monkeypatch.setattr(outlook, "enabled", lambda: False)
+    webapp.app.config["DB_PATH"] = tmp_path / "web.db"
+    client = webapp.app.test_client()
+    data = {"name": "X", "source": "paste"}
+    assert client.post("/contacts", data=data, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.post("/contacts", data=data, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert client.post("/contacts", data=data, headers={"Origin": "http://localhost", "Sec-Fetch-Site": "same-origin"}).status_code == 302
+
+
+def test_safe_url_blocks_script_links():
+    import app as webapp
+    f = webapp.app.jinja_env.filters["safe_url"]
+    assert f("javascript:alert(1)") == "#"
+    assert f(" JaVaScRiPt:alert(1)") == "#"
+    assert f("https://www.linkedin.com/in/x") == "https://www.linkedin.com/in/x"
+    assert f("") == "#"
