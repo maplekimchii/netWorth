@@ -1,0 +1,5 @@
+networth.db
+.token_cache.json
+.env
+__pycache__/
+.venv/
