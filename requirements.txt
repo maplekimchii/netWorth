@@ -1,0 +1,7 @@
+flask
+anthropic
+msal
+requests
+openpyxl
+python-dotenv
+pytest

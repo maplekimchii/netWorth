@@ -3,3 +3,5 @@ networth.db
 .env
 __pycache__/
 .venv/
+.superpowers/
+uploads/
