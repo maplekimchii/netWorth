@@ -53,14 +53,28 @@ export async function contactExists(name: string, company = "") {
 export const CONTACT_TEXT_FIELDS = [
   "title", "email", "linkedinUrl", "howConnected", "notes", "team", "school", "program",
 ] as const;
-export type ContactFields = Partial<Record<(typeof CONTACT_TEXT_FIELDS)[number], string>> & { gradYear?: string };
+export type ContactFields = Partial<Record<(typeof CONTACT_TEXT_FIELDS)[number], string>> & {
+  gradYear?: string; attributes?: Record<string, string>;
+};
+
+/** "city: Toronto" lines to {city: "Toronto"}. Keys are lowercased with spaces as underscores so graph levels match. */
+export function parseAttributes(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const i = line.indexOf(":");
+    const k = line.slice(0, i).trim().toLowerCase().replace(/\s+/g, "_");
+    if (i > 0 && k && line.slice(i + 1).trim()) out[k] = line.slice(i + 1).trim();
+  }
+  return out;
+}
 
 function contactValues(f: ContactFields) {
   const year = Number.parseInt(f.gradYear ?? "", 10);
   return {
     ...Object.fromEntries(CONTACT_TEXT_FIELDS.map((k) => [k, (f[k] ?? "").trim()])),
     gradYear: Number.isFinite(year) ? year : null,
-  } as Record<(typeof CONTACT_TEXT_FIELDS)[number], string> & { gradYear: number | null };
+    ...(f.attributes ? { attributes: f.attributes } : {}),
+  } as Record<(typeof CONTACT_TEXT_FIELDS)[number], string> & { gradYear: number | null; attributes?: Record<string, string> };
 }
 
 /** Returns the new id, or null when the same person at the same company is already saved. */
@@ -124,6 +138,24 @@ export async function recordDraft(contactId: number, kind: "initial" | "followup
 
 export async function updateDraft(messageId: number, subject: string, body: string) {
   await db.update(messages).set({ subject, body }).where(and(eq(messages.id, messageId), isNull(messages.sentAt)));
+}
+
+/** Delete an unsent draft. A contact left 'drafted' with no drafts goes back to 'sent' (if anything was sent) or 'to_contact'. */
+export async function deleteDraft(messageId: number) {
+  const [m] = await db.delete(messages).where(and(eq(messages.id, messageId), isNull(messages.sentAt)))
+    .returning({ contactId: messages.contactId });
+  if (!m) return;
+  const left = await db.select({ sentAt: messages.sentAt }).from(messages).where(eq(messages.contactId, m.contactId));
+  if (left.some((x) => !x.sentAt)) return;
+  await db.update(contacts).set({ status: left.length ? "sent" : "to_contact" })
+    .where(and(eq(contacts.id, m.contactId), eq(contacts.status, "drafted")));
+}
+
+export async function listDrafts() {
+  return db.select({ m: messages, name: contacts.name, email: contacts.email, company: companies.name })
+    .from(messages).innerJoin(contacts, eq(contacts.id, messages.contactId))
+    .leftJoin(companies, eq(companies.id, contacts.companyId))
+    .where(isNull(messages.sentAt)).orderBy(desc(messages.createdAt));
 }
 
 export async function markSent(messageId: number, sentAt = new Date()) {

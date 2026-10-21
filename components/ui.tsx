@@ -5,7 +5,7 @@ export function Pill({ status, text }: { status: string; text?: string }) {
 }
 
 type Values = Partial<Record<"name" | "company" | "title" | "email" | "linkedinUrl" | "howConnected" | "notes"
-  | "team" | "school" | "program" | "gradYear", string | number | null>>;
+  | "team" | "school" | "program" | "gradYear", string | number | null>> & { attributes?: Record<string, string> };
 
 /** Shared by Add contact, Edit details, and the parsed-profile form. */
 export function ContactFormFields({ v = {}, notes = false }: { v?: Values; notes?: boolean }) {
@@ -23,6 +23,10 @@ export function ContactFormFields({ v = {}, notes = false }: { v?: Values; notes
       <label className="field"><span>Grad year</span><input name="gradYear" inputMode="numeric" defaultValue={d("gradYear")} /></label>
       <label className="field"><span>How connected</span><input name="howConnected" defaultValue={d("howConnected")} placeholder="e.g. Waterloo alum" /></label>
       {notes && <label className="field full"><span>Notes</span><textarea name="notes" rows={3} defaultValue={d("notes")} /></label>}
+      {v.attributes && (
+        <label className="field full"><span>Custom fields <span className="hint">one per line, like city: Toronto; usable as graph levels</span></span>
+          <textarea name="attributes" rows={3} defaultValue={Object.entries(v.attributes).map(([k, x]) => `${k}: ${x}`).join("\n")} /></label>
+      )}
     </div>
   );
 }

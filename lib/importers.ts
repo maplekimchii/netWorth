@@ -12,7 +12,7 @@ export const FIELDS = [
   "team", "school", "program", "grad_year",
 ] as const;
 type Field = (typeof FIELDS)[number];
-const FIELD_KEY: Partial<Record<Field, keyof ContactFields>> = {
+const FIELD_KEY: Partial<Record<Field, Exclude<keyof ContactFields, "attributes">>> = {
   title: "title", email: "email", linkedin_url: "linkedinUrl", how_connected: "howConnected", notes: "notes",
   team: "team", school: "school", program: "program", grad_year: "gradYear",
 };

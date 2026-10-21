@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
-import { markReplied, markSent, setStatus, updateContact } from "@/app/actions";
+import { markReplied, setStatus, updateContact } from "@/app/actions";
 import { StatusSelect } from "@/components/client";
+import { DraftControls } from "@/components/drafts";
 import { ContactFormFields, Pill } from "@/components/ui";
 import { db } from "@/db";
 import { emailTemplates, messages } from "@/db/schema";
 import { getContact, STATUSES } from "@/lib/data";
-import { composeUrl, label, niceDate, safeUrl } from "@/lib/format";
+import { label, niceDate, safeUrl } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 import { DraftEditor } from "./draft-editor";
 
@@ -62,15 +63,10 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
                         {m.repliedAt && ` · replied ${niceDate(m.repliedAt)}`}
                       </div>
                       <details><summary>Show email</summary><pre>{m.body}</pre></details>
-                      {(!m.sentAt || (latest && !m.repliedAt)) && (
+                      {!m.sentAt && <DraftControls m={m} to={c.email} />}
+                      {latest && !m.repliedAt && (
                         <div className="row actions">
-                          {!m.sentAt && (
-                            <a className="btn btn-sm" href={composeUrl(c.email, m.subject, m.body)} target="_blank" rel="noopener">Open in Outlook</a>
-                          )}
-                          {!m.sentAt && <form className="inline" action={markSent.bind(null, m.id)}><button className="btn btn-sm">Mark sent</button></form>}
-                          {latest && !m.repliedAt && (
-                            <form className="inline" action={markReplied.bind(null, m.id)}><button className="btn btn-sm">Mark replied</button></form>
-                          )}
+                          <form className="inline" action={markReplied.bind(null, m.id)}><button className="btn btn-sm">Mark replied</button></form>
                         </div>
                       )}
                     </li>

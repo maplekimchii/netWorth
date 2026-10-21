@@ -9,6 +9,7 @@ export const contactStatus = pgEnum("contact_status",
 export const contactSource = pgEnum("contact_source", ["linkedin_csv", "ai_search", "paste", "import"]);
 export const appStatus = pgEnum("app_status", ["planned", "applied", "interview", "offer", "rejected"]);
 export const messageKind = pgEnum("message_kind", ["initial", "followup"]);
+export const jobKind = pgEnum("job_kind", ["draft", "enrich"]);
 export const jobStatus = pgEnum("job_status", ["running", "done", "cancelled"]);
 export const jobItemStatus = pgEnum("job_item_status", ["pending", "done", "failed"]);
 
@@ -95,7 +96,8 @@ export const columnMappings = pgTable("column_mappings", {
 
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
-  instruction: text("instruction").notNull(),
+  kind: jobKind("kind").notNull().default("draft"),
+  instruction: text("instruction").notNull().default(""),
   templateId: integer("template_id").references(() => emailTemplates.id, { onDelete: "set null" }),
   status: jobStatus("status").notNull().default("running"),
   createdAt: createdAt(),

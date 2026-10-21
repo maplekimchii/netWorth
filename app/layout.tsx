@@ -22,10 +22,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <nav className="sidebar" aria-label="Main">
             <div className="brand">net<span>Worth</span></div>
             <NavLink href="/" count={await dueCount()}>Today</NavLink>
+            <NavLink href="/drafts">Drafts</NavLink>
             <NavLink href="/contacts">Contacts</NavLink>
+            <NavLink href="/graph">Network graph</NavLink>
             <NavLink href="/find">Find people</NavLink>
             <NavLink href="/companies">Companies</NavLink>
             <NavLink href="/applications">Applications</NavLink>
+            <NavLink href="/batch">Batch AI</NavLink>
             <div className="nav-group">Setup</div>
             <NavLink href="/templates">Email templates</NavLink>
             <NavLink href="/profile">Profile</NavLink>

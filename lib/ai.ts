@@ -119,6 +119,42 @@ function context(p: Profile, c: DraftContact, co: DraftCompany, prior: PriorMess
   return lines.join("\n");
 }
 
+/** Write a whole email from a one-off instruction, for batch jobs run without a template. */
+export async function freeDraft(
+  instruction: string, profile: Profile, contact: DraftContact, company: DraftCompany, prior: PriorMessage[],
+): Promise<{ subject: string; body: string }> {
+  const data = await askJson(SLOT_SYSTEM, `${context(profile, contact, company, prior)}
+
+<voice_samples>
+${profile.voiceSamples || "(none provided: write plainly and warmly)"}
+</voice_samples>
+
+Write one networking email from me to ${contact.name}. Instruction: ${instruction || "a short, personable note asking for a 15-minute chat"}
+Keep it under 150 words, sign it with my name, and use only facts from the context.
+
+Reply with only a JSON object: {"subject": "", "body": ""}`);
+  return { subject: str(data.subject), body: str(data.body) };
+}
+
+export const ENRICH_FIELDS = ["industry", "team", "school", "program", "grad_year"] as const;
+export type Enriched = Record<(typeof ENRICH_FIELDS)[number], string>;
+
+/** Infer graph fields from what we already know about a contact. Empty when the text does not say. */
+export async function enrich(contact: DraftContact & { team: string; school: string; program: string }): Promise<Enriched> {
+  const data = await askJson("You fill in missing CRM fields from the text given. Use only what the text says or "
+    + "what is common knowledge about the company (for industry). Leave a field empty when unsure.", `Contact: ${contact.name}
+Title: ${contact.title || "unknown"}
+Company: ${contact.company || "unknown"}
+Team: ${contact.team || "unknown"}
+School: ${contact.school || "unknown"}, program: ${contact.program || "unknown"}
+How we're connected: ${contact.howConnected || "unknown"}
+Notes: ${contact.notes || "none"}
+
+Reply with only a JSON object:
+{"industry": "the company's industry in 1-3 words", "team": "", "school": "", "program": "", "grad_year": "4-digit year or empty"}`);
+  return Object.fromEntries(ENRICH_FIELDS.map((k) => [k, str(data[k])])) as Enriched;
+}
+
 /** Fill a template for one contact. `extra` is an optional one-off instruction (used by batch jobs). */
 export async function draft(
   template: { subject: string; body: string }, profile: Profile, contact: DraftContact,

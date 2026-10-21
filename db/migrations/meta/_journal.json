@@ -29,6 +29,13 @@
       "when": 1792548052161,
       "tag": "0003_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792548934784,
+      "tag": "0004_job_kind",
+      "breakpoints": true
     }
   ]
 }

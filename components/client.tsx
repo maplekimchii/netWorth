@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useFormStatus } from "react-dom";
-import { label as pretty } from "@/lib/format";
+import { composeUrl, label as pretty } from "@/lib/format";
 
 /** A status dropdown styled as a pill that saves as soon as it changes. */
 export function StatusSelect({ action, name = "status", current, options, label, hidden }: {
@@ -48,5 +48,21 @@ export function NavLink({ href, children, count }: { href: string; children: Rea
     <Link className="nav-link" href={href} aria-current={current ? "page" : undefined}>
       {children}{count ? <span className="count" aria-label={`${count} due`}>{count}</span> : null}
     </Link>
+  );
+}
+
+// ponytail: 2,000 is the conservative URL length every browser and Outlook accepts; past it the body goes via clipboard.
+const MAX_URL = 2000;
+
+/** Opens the email in Outlook on the web. A body too long for a URL is copied to the clipboard instead. */
+export function OpenInOutlook({ to, subject, body }: { to: string; subject: string; body: string }) {
+  const full = composeUrl(to, subject, body);
+  const tooLong = full.length > MAX_URL;
+  return (
+    <a className="btn btn-sm" target="_blank" rel="noopener" href={tooLong ? composeUrl(to, subject, "") : full}
+      title={tooLong ? "Body is copied to your clipboard: paste it into Outlook" : undefined}
+      onClick={() => { if (tooLong) void navigator.clipboard.writeText(body); }}>
+      Open in Outlook{tooLong && " (paste body)"}
+    </a>
   );
 }

@@ -4,10 +4,11 @@ import { eq } from "drizzle-orm";
 import OpenAI from "openai";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { companies, emailTemplates, messages, profile } from "@/db/schema";
+import { companies, emailTemplates, graphViews, messages, profile } from "@/db/schema";
 import * as ai from "@/lib/ai";
 import * as data from "@/lib/data";
 import * as importers from "@/lib/importers";
+import * as jobs from "@/lib/jobs";
 import { go, requireUser } from "@/lib/session";
 import { AIError, unfilled } from "@/lib/templating";
 
@@ -22,7 +23,9 @@ function aiError(e: unknown): { error: string } {
 }
 
 function contactFields(fd: FormData): data.ContactFields {
-  return Object.fromEntries([...data.CONTACT_TEXT_FIELDS, "gradYear"].map((k) => [k, s(fd, k)]));
+  const f: data.ContactFields = Object.fromEntries([...data.CONTACT_TEXT_FIELDS, "gradYear"].map((k) => [k, s(fd, k)]));
+  if (fd.has("attributes")) f.attributes = data.parseAttributes(String(fd.get("attributes")));
+  return f;
 }
 
 // --- contacts ---
@@ -76,6 +79,18 @@ export async function saveDraft(contactId: number, fd: FormData) {
   const kind = s(fd, "kind") === "followup" ? "followup" : "initial";
   await data.recordDraft(contactId, kind, s(fd, "subject"), String(fd.get("body") ?? ""));
   go(`/contacts/${contactId}`, "Draft saved.");
+}
+
+export async function updateDraft(messageId: number, fd: FormData) {
+  await requireUser();
+  await data.updateDraft(messageId, s(fd, "subject"), String(fd.get("body") ?? ""));
+  refresh();
+}
+
+export async function deleteDraft(messageId: number) {
+  await requireUser();
+  await data.deleteDraft(messageId);
+  refresh();
 }
 
 export async function markSent(messageId: number) {
@@ -248,4 +263,56 @@ export async function importSheet(_prev: ImportState, fd: FormData): Promise<Imp
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+// --- batch jobs ---
+
+export async function startJob(fd: FormData) {
+  await requireUser();
+  const kind = s(fd, "kind") === "enrich" ? "enrich" : "draft";
+  const ids = fd.getAll("contactId").map(Number).filter(Number.isInteger);
+  let id: number;
+  try {
+    id = await jobs.createJob(kind, s(fd, "instruction"), kind === "draft" ? optInt(s(fd, "templateId")) : null, ids);
+  } catch (e) {
+    go("/batch", (e as Error).message);
+  }
+  go(`/batch/${id}`);
+}
+
+export async function runJobItem(itemId: number) {
+  await requireUser();
+  return jobs.runItem(itemId);
+}
+
+export async function pendingJobItems(jobId: number) {
+  await requireUser();
+  return jobs.pendingItems(jobId);
+}
+
+export async function cancelJob(jobId: number) {
+  await requireUser();
+  await jobs.cancelJob(jobId);
+  refresh();
+}
+
+export async function retryJob(jobId: number) {
+  await requireUser();
+  await jobs.retryFailed(jobId);
+  refresh();
+}
+
+// --- network graph ---
+
+export async function saveGraphView(levels: string[], fd: FormData) {
+  await requireUser();
+  const name = s(fd, "name") || levels.join(" → ");
+  const [v] = await db.insert(graphViews).values({ name, levels }).returning({ id: graphViews.id });
+  go(`/graph?view=${v.id}`, `Saved view “${name}”.`);
+}
+
+export async function deleteGraphView(id: number) {
+  await requireUser();
+  await db.delete(graphViews).where(eq(graphViews.id, id));
+  go("/graph");
 }

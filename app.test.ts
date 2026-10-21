@@ -6,6 +6,8 @@ import { db } from "@/db";
 import * as data from "@/lib/data";
 import * as ai from "@/lib/ai";
 import * as importers from "@/lib/importers";
+import * as jobs from "@/lib/jobs";
+import { buildTree, parseLevels, type GraphContact } from "@/lib/graph";
 import { composeUrl, niceDate, safeUrl, today } from "@/lib/format";
 import { AIError, applySlots, extractSlots, fillData, parseJson, unfilled } from "@/lib/templating";
 
@@ -296,5 +298,135 @@ describe("format", () => {
     expect(u.origin + u.pathname).toBe("https://outlook.office.com/mail/deeplink/compose");
     expect(u.searchParams.get("body")).toBe("Line 1\nA & B");
     expect(u.search).not.toContain("+");
+  });
+});
+
+describe("drafts", () => {
+  it("deleting the only draft puts the contact back where it was", async () => {
+    const cid = (await data.addContact("Ann Lee", "paste", "Figma"))!;
+    const first = await data.recordDraft(cid, "initial", "Hi", "Body");
+    await data.deleteDraft(first);
+    expect((await data.getContact(cid))!.status).toBe("to_contact");
+
+    const { cid: sentId } = await sentContact();
+    const nudge = await data.recordDraft(sentId, "followup", "Re: Hi", "Nudge");
+    expect((await data.getContact(sentId))!.status).toBe("drafted");
+    await data.deleteDraft(nudge);
+    const c = (await data.getContact(sentId))!;
+    expect([c.status, c.nextFollowupDate]).toEqual(["sent", "2026-10-06"]);
+  });
+
+  it("never edits or deletes a sent message", async () => {
+    const { mid } = await sentContact();
+    await data.updateDraft(mid, "Changed", "Changed");
+    await data.deleteDraft(mid);
+    expect((await data.listDrafts())).toHaveLength(0);
+    const { rows } = await run(sql`select subject from messages where id = ${mid}`) as unknown as { rows: { subject: string }[] };
+    expect(rows[0].subject).toBe("Hi");
+  });
+
+  it("parses custom fields into graph-friendly keys", () => {
+    expect(data.parseAttributes("City: Toronto\nfav lang : Rust\nbroken line\nempty:")).toEqual({ city: "Toronto", fav_lang: "Rust" });
+  });
+});
+
+describe("batch jobs", () => {
+  beforeEach(() => { process.env.OPENAI_API_KEY = "test"; });
+
+  async function runAll(jobId: number) {
+    for (const id of await jobs.pendingItems(jobId)) await jobs.runItem(id);
+    return (await jobs.getJob(jobId))!;
+  }
+
+  it("drafts one email per contact, skips people who already have a draft, and finishes", async () => {
+    const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
+    const b = (await data.addContact("Bob Roe", "paste", "Figma"))!;
+    await data.recordDraft(b, "initial", "Existing", "Body");
+    openaiReply = '{"subject": "Coffee?", "body": "Hi Ann"}';
+    const job = await runAll(await jobs.createJob("draft", "be personable", null, [a, b]));
+    expect(job.status).toBe("done");
+    expect(job.items.map((i) => [i.name, i.status, i.error])).toEqual([
+      ["Ann Lee", "done", null], ["Bob Roe", "failed", "Already has an unsent draft."],
+    ]);
+    expect(String(openaiCalls[0].input)).toContain("be personable");
+    expect((await data.listDrafts()).map((d) => d.m.subject).sort()).toEqual(["Coffee?", "Existing"]);
+    expect((await data.getContact(a))!.status).toBe("drafted");
+  });
+
+  it("passes the instruction to template slots and keeps fixed text", async () => {
+    const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
+    openaiReply = '{"hook": "Loved the Config talk.", "why_company": "Figma is where I want to build."}';
+    await runAll(await jobs.createJob("draft", "mention Config", 1, [a]));
+    const [d] = await data.listDrafts();
+    expect(d.m.subject).toBe("Waterloo student interested in Figma");
+    expect(d.m.body).toContain("Loved the Config talk.");
+    expect(String(openaiCalls[0].input)).toContain("mention Config");
+  });
+
+  it("records AI failures per item and can retry them", async () => {
+    const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
+    openaiReply = "not json";
+    let job = await runAll(await jobs.createJob("draft", "", null, [a]));
+    expect(job.items[0].status).toBe("failed");
+    expect(job.status).toBe("done");
+    await jobs.retryFailed(job.id);
+    openaiReply = '{"subject": "Hi", "body": "Hello"}';
+    job = await runAll(job.id);
+    expect([job.status, job.items[0].status]).toEqual(["done", "done"]);
+  });
+
+  it("does nothing after cancel", async () => {
+    const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
+    const id = await jobs.createJob("draft", "", null, [a]);
+    await jobs.cancelJob(id);
+    expect(await jobs.runItem((await jobs.pendingItems(id))[0])).toEqual({ status: "skipped" });
+    expect(openaiCalls).toHaveLength(0);
+  });
+
+  it("enrich fills only blank fields, including the company's industry", async () => {
+    const a = (await data.addContact("Ann Lee", "paste", "Figma", { school: "UofT" }))!;
+    openaiReply = '{"industry": "Design software", "team": "Growth", "school": "Waterloo", "program": "CS", "grad_year": "2021"}';
+    await runAll(await jobs.createJob("enrich", "", null, [a]));
+    const c = (await data.getContact(a))!;
+    expect([c.school, c.team, c.program, c.gradYear]).toEqual(["UofT", "Growth", "CS", 2021]);
+    const { rows } = await run(sql`select industry from companies where name = 'Figma'`) as unknown as { rows: { industry: string }[] };
+    expect(rows[0].industry).toBe("Design software");
+  });
+
+  it("refuses an empty selection", async () => {
+    await expect(jobs.createJob("draft", "", null, [])).rejects.toThrow("Pick at least one");
+  });
+});
+
+describe("network graph", () => {
+  const person = (id: number, name: string, extra: Partial<GraphContact> = {}): GraphContact => ({
+    id, name, title: "", team: "", school: "", program: "", gradYear: null, status: "to_contact", source: "paste",
+    howConnected: "", attributes: {}, company: null, industry: null, ...extra,
+  });
+  const people = [
+    person(1, "Ann", { industry: "Fintech", company: "Stripe", attributes: { city: "Toronto" } }),
+    person(2, "Bob", { industry: "Fintech", company: "Stripe" }),
+    person(3, "Cy", { industry: "Fintech", company: "Wise" }),
+    person(4, "Di", { company: "Figma" }),
+  ];
+
+  it("groups by levels in order, biggest first, Unknown last, with counts", () => {
+    const t = buildTree(people, ["industry", "company"], "Sean");
+    expect(t.name).toBe("Sean");
+    expect(t.children!.map((c) => [c.name, c.count])).toEqual([["Fintech", 3], ["Unknown", 1]]);
+    expect(t.children![0].children!.map((c) => [c.name, c.count])).toEqual([["Stripe", 2], ["Wise", 1]]);
+    expect(t.children![0].children![0].children).toEqual([{ name: "Ann", count: 1, contactId: 1 }, { name: "Bob", count: 1, contactId: 2 }]);
+  });
+
+  it("reorders levels and groups by custom attributes", () => {
+    const t = buildTree(people, ["attr:city", "industry"]);
+    expect(t.children!.map((c) => [c.name, c.count])).toEqual([["Toronto", 1], ["Unknown", 3]]); // Unknown last even when bigger
+    expect(t.children![0].children![0].name).toBe("Fintech");
+  });
+
+  it("keeps only known levels from the URL, defaulting when none are left", () => {
+    expect(parseLevels("school,attr:city,bogus,school", ["city"])).toEqual(["school", "attr:city"]);
+    expect(parseLevels("bogus", [])).toEqual(["industry", "company"]);
+    expect(parseLevels(undefined, [])).toEqual(["industry", "company"]);
   });
 });
