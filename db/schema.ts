@@ -9,7 +9,7 @@ export const contactStatus = pgEnum("contact_status",
 export const contactSource = pgEnum("contact_source", ["linkedin_csv", "ai_search", "paste", "import"]);
 export const appStatus = pgEnum("app_status", ["planned", "applied", "interview", "offer", "rejected"]);
 export const messageKind = pgEnum("message_kind", ["initial", "followup"]);
-export const messageState = pgEnum("message_state", ["app_draft", "outlook_draft", "sent"]);
+export const messageState = pgEnum("message_state", ["draft", "sent"]);
 export const jobStatus = pgEnum("job_status", ["running", "done", "cancelled"]);
 export const jobItemStatus = pgEnum("job_item_status", ["pending", "done", "failed"]);
 
@@ -71,11 +71,9 @@ export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
   contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
   kind: messageKind("kind").notNull(),
-  state: messageState("state").notNull().default("app_draft"),
+  state: messageState("state").notNull().default("draft"),
   subject: text("subject").notNull().default(""),
   body: text("body").notNull().default(""),
-  outlookMessageId: text("outlook_message_id"),
-  outlookConversationId: text("outlook_conversation_id"),
   createdAt: createdAt(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   repliedAt: timestamp("replied_at", { withTimezone: true }),
@@ -119,12 +117,3 @@ export const graphViews = pgTable("graph_views", {
   name: text("name").notNull(),
   levels: jsonb("levels").$type<string[]>().notNull(),
 });
-
-// ponytail: single user, so one token row instead of the Auth.js adapter tables.
-export const outlookTokens = pgTable("outlook_tokens", {
-  id: integer("id").primaryKey().default(1),
-  accessToken: text("access_token").notNull(),
-  refreshToken: text("refresh_token").notNull(),
-  expiresAt: integer("expires_at").notNull(), // unix seconds
-  scope: text("scope").notNull().default(""),
-}, (t) => [check("outlook_tokens_single_row", sql`${t.id} = 1`)]);
