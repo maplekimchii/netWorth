@@ -1,0 +1,8 @@
+# Replace 1.2.3.4 with the VM's public IP. sslip.io resolves it, so Caddy can get a free HTTPS cert.
+# Password hash: run `caddy hash-password` on the VM and paste the output below.
+136-80-208-199.sslip.io {
+	basicauth {
+		me $2a$14$sJFznykN5QilFaDcEDLVDOxcPb08aLR6xM08xIrYwsHCJYhESbijC
+	}
+	reverse_proxy 127.0.0.1:5050
+}
