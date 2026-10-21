@@ -1,10 +1,4 @@
-networth.db
-.token_cache.json
-.env
-__pycache__/
-.venv/
 .superpowers/
-uploads/
 
 # next.js
 /node_modules
