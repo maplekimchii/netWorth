@@ -9,7 +9,6 @@ export const contactStatus = pgEnum("contact_status",
 export const contactSource = pgEnum("contact_source", ["linkedin_csv", "ai_search", "paste", "import"]);
 export const appStatus = pgEnum("app_status", ["planned", "applied", "interview", "offer", "rejected"]);
 export const messageKind = pgEnum("message_kind", ["initial", "followup"]);
-export const messageState = pgEnum("message_state", ["draft", "sent"]);
 export const jobStatus = pgEnum("job_status", ["running", "done", "cancelled"]);
 export const jobItemStatus = pgEnum("job_item_status", ["pending", "done", "failed"]);
 
@@ -71,7 +70,6 @@ export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
   contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
   kind: messageKind("kind").notNull(),
-  state: messageState("state").notNull().default("draft"),
   subject: text("subject").notNull().default(""),
   body: text("body").notNull().default(""),
   createdAt: createdAt(),

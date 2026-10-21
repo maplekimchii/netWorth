@@ -15,6 +15,20 @@
       "when": 1792547650808,
       "tag": "0001_majestic_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792548051245,
+      "tag": "0002_lumpy_centennial",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792548052161,
+      "tag": "0003_seed",
+      "breakpoints": true
     }
   ]
 }

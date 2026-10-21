@@ -71,7 +71,7 @@ code { font: 12px var(--mono); background: var(--gray-bg); padding: 1px 5px; bor
 
 .main { min-width: 0; }
 .page { max-width: 1100px; margin: 0 auto; padding: 28px 32px 64px; }
-.page-narrow { max-width: 820px; }
+.page-narrow { max-width: 820px; margin: 0 auto; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .page-head .sub { color: var(--muted); margin-top: 4px; }
 .two-col { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
