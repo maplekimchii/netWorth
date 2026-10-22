@@ -1,5 +1,6 @@
 // Port of the v1 pytest suite. Postgres runs in memory (PGlite) with the real migrations; OpenAI is faked.
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
@@ -265,6 +266,18 @@ describe("importers", () => {
     expect((await importers.importRows(t.rows, mapping, "import")).added).toBe(1);
   });
 
+  it("reads Excel tables linked by absolute path, as openpyxl writes them", async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet("Contacts").addTable({
+      name: "Contacts", ref: "A1", columns: [{ name: "Name" }, { name: "Company" }], rows: [["Ann Lee", "Figma"]],
+    });
+    const zip = await JSZip.loadAsync(await wb.xlsx.writeBuffer());
+    const rels = "xl/worksheets/_rels/sheet1.xml.rels";
+    zip.file(rels, (await zip.file(rels)!.async("string")).replace('Target="../tables/', 'Target="/xl/tables/'));
+    const t = await importers.readTable("people.xlsx", await zip.generateAsync({ type: "nodebuffer" }));
+    expect(t.rows).toEqual([{ Name: "Ann Lee", Company: "Figma" }]);
+  });
+
   it("rejects garbage instead of an .xlsx", async () => {
     await expect(importers.readTable("people.xlsx", Buffer.from("not an excel file"))).rejects.toThrow("Could not read");
   });
@@ -284,6 +297,9 @@ describe("format", () => {
     expect(safeUrl(" JaVaScRiPt:alert(1)")).toBe("#");
     expect(safeUrl("https://www.linkedin.com/in/x")).toBe("https://www.linkedin.com/in/x");
     expect(safeUrl("")).toBe("#");
+    expect(safeUrl("linkedin.com/in/x")).toBe("https://linkedin.com/in/x");
+    expect(safeUrl("www.linkedin.com/in/x")).toBe("https://www.linkedin.com/in/x");
+    expect(safeUrl("not a url")).toBe("#");
   });
 
   it("formats dates", () => {

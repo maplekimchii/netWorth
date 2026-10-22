@@ -26,7 +26,9 @@ export function niceDate(value: string | Date | null | undefined): string {
 /** Only http(s) links reach an href; AI- or import-supplied javascript: URLs become "#". */
 export function safeUrl(url: string | null | undefined): string {
   const u = (url ?? "").trim();
-  return /^https?:\/\//i.test(u) ? u : "#";
+  if (/^https?:\/\//i.test(u)) return u;
+  // A bare "linkedin.com/in/x" is a site, not a path in this app. Anything with a scheme (javascript:) stays blocked.
+  return /^[\w-]+(\.[\w-]+)+(\/|$)/.test(u) ? `https://${u}` : "#";
 }
 
 export const label = (s: string) => s.replaceAll("_", " ");

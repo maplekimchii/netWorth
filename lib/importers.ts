@@ -1,6 +1,7 @@
 // LinkedIn and spreadsheet import, Excel export. Port of v1 importers.py.
 import { Readable } from "node:stream";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { eq, getTableColumns } from "drizzle-orm";
 import { db } from "@/db";
 import * as t from "@/db/schema";
@@ -71,6 +72,15 @@ function toRows(grid: string[][], start: number): Row[] {
 
 export type Table = { sheets: string[]; sheet: string; headers: string[]; rows: Row[] };
 
+// ExcelJS 4.4 only finds tables linked as "../tables/x.xml" and crashes on the absolute
+// "/xl/tables/x.xml" that openpyxl writes, so rewrite those links before loading.
+async function relativeTableLinks(data: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(data);
+  const rels = zip.file(/^xl\/worksheets\/_rels\/[^/]+\.rels$/);
+  for (const f of rels) zip.file(f.name, (await f.async("string")).replaceAll('Target="/xl/tables/', 'Target="../tables/'));
+  return rels.length ? zip.generateAsync({ type: "nodebuffer" }) : data;
+}
+
 export async function readTable(filename: string, data: Buffer, sheet?: string): Promise<Table> {
   let sheets: string[], grid: string[][];
   if (filename.toLowerCase().endsWith(".csv")) {
@@ -79,7 +89,7 @@ export async function readTable(filename: string, data: Buffer, sheet?: string):
   } else {
     const wb = new ExcelJS.Workbook();
     try {
-      await wb.xlsx.load(data as unknown as ArrayBuffer);
+      await wb.xlsx.load((await relativeTableLinks(data)) as unknown as ArrayBuffer);
     } catch {
       throw new Error(`Could not read ${filename}. Upload an .xlsx or .csv file.`);
     }
