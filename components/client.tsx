@@ -25,6 +25,11 @@ export function AutoSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>)
   return <select {...props} onChange={(e) => e.currentTarget.form?.requestSubmit()} />;
 }
 
+/** Submit button that asks first. For deletes. */
+export function ConfirmButton({ confirm, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { confirm: string }) {
+  return <button {...rest} onClick={(e) => { if (!window.confirm(confirm)) e.preventDefault(); }} />;
+}
+
 /** Submit button that shows a working label while its form's action runs (AI calls take a while). */
 export function Submit({ children, pending, className = "btn", ...rest }:
   React.ButtonHTMLAttributes<HTMLButtonElement> & { pending?: string }) {

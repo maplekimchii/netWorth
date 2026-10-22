@@ -1,5 +1,6 @@
 import { asc } from "drizzle-orm";
-import { saveTemplate } from "@/app/actions";
+import { deleteTemplate, saveTemplate } from "@/app/actions";
+import { ConfirmButton } from "@/components/client";
 import { db } from "@/db";
 import { emailTemplates } from "@/db/schema";
 import { requireUser } from "@/lib/session";
@@ -31,6 +32,11 @@ export default async function Templates() {
             <div className="card-head">
               <h2>{t ? t.name : "New template"}</h2>
               {t && <span className={`pill ${t.kind === "initial" ? "s-sent" : "s-drafted"}`}>{t.kind === "initial" ? "first email" : "follow-up"}</span>}
+              {t && (
+                <form className="inline" action={deleteTemplate.bind(null, t.id)}>
+                  <ConfirmButton className="btn btn-sm btn-ghost" confirm={`Delete the template "${t.name}"?`}>Delete</ConfirmButton>
+                </form>
+              )}
             </div>
             <form action={saveTemplate} className="card-body">
               {t && <input type="hidden" name="id" value={t.id} />}

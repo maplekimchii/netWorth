@@ -1,14 +1,15 @@
 "use server";
 // Every form in the app posts to one of these. Each checks the session first.
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { companies, emailTemplates, graphViews, messages, profile } from "@/db/schema";
+import { companies, contacts, emailTemplates, graphViews, messages, profile } from "@/db/schema";
 import * as ai from "@/lib/ai";
 import * as data from "@/lib/data";
 import * as importers from "@/lib/importers";
 import * as jobs from "@/lib/jobs";
+import { plural } from "@/lib/format";
 import { go, requireUser } from "@/lib/session";
 import { AIError, unfilled } from "@/lib/templating";
 
@@ -48,6 +49,17 @@ export async function updateContact(id: number, fd: FormData) {
   await requireUser();
   await data.updateContact(id, s(fd, "name"), s(fd, "company"), contactFields(fd));
   go(`/contacts/${id}`, "Saved.");
+}
+
+/** Deletes the checked contacts, or every contact when the "all" button sent the form. Drafts and messages go with them. */
+export async function deleteContacts(fd: FormData) {
+  await requireUser();
+  const ids = fd.getAll("id").map(Number).filter(Number.isInteger);
+  if (!fd.has("all") && !ids.length) go("/contacts", "Tick the contacts to delete first.");
+  const gone = await (fd.has("all") ? db.delete(contacts) : db.delete(contacts).where(inArray(contacts.id, ids)))
+    .returning({ id: contacts.id });
+  refresh();
+  go("/contacts", `Deleted ${plural(gone.length, "contact")}.`);
 }
 
 export async function setStatus(id: number, fd: FormData) {
@@ -210,6 +222,13 @@ export async function saveTemplate(fd: FormData) {
   if (id) await db.update(emailTemplates).set(values).where(eq(emailTemplates.id, id));
   else await db.insert(emailTemplates).values(values);
   go("/templates", "Template saved.");
+}
+
+/** Drafts already written keep their text; a batch job using it drafts freely for the people it hasn't reached. */
+export async function deleteTemplate(id: number) {
+  await requireUser();
+  await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+  go("/templates", "Template deleted.");
 }
 
 export async function saveProfile(fd: FormData) {

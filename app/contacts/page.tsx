@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { asc } from "drizzle-orm";
-import { addContact, setStatus } from "@/app/actions";
-import { StatusSelect } from "@/components/client";
+import { addContact, deleteContacts, setStatus } from "@/app/actions";
+import { ConfirmButton, StatusSelect } from "@/components/client";
 import { ContactFormFields } from "@/components/ui";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
@@ -50,11 +50,19 @@ export default async function Contacts({ searchParams }: PageProps<"/contacts">)
       <div className="card">
         {rows.length ? (
           <div className="table-wrap">
+            {/* Row checkboxes join this form through form="bulk": each status pill is its own form, and forms can't nest. */}
+            <form id="bulk" action={deleteContacts} className="card-body row" style={{ borderBottom: "1px solid var(--line-soft)" }}>
+              <p className="muted small spacer">Tick contacts to delete them. Their drafts and messages go too.</p>
+              <ConfirmButton className="btn btn-sm" confirm="Delete the ticked contacts and their drafts and messages?">Delete selected</ConfirmButton>
+              <ConfirmButton className="btn btn-sm btn-ghost" name="all" value="1"
+                confirm="Delete ALL contacts, not only the ones shown, with their drafts and messages? This can't be undone.">Delete all contacts</ConfirmButton>
+            </form>
             <table className="table">
-              <thead><tr><th>Name</th><th>Company</th><th>Status</th><th>Follow up</th><th>Source</th></tr></thead>
+              <thead><tr><th aria-label="Select"></th><th>Name</th><th>Company</th><th>Status</th><th>Follow up</th><th>Source</th></tr></thead>
               <tbody>
                 {rows.map((c) => (
                   <tr key={c.id}>
+                    <td><input type="checkbox" form="bulk" name="id" value={c.id} aria-label={`Select ${c.name}`} /></td>
                     <td><Link className="name" href={`/contacts/${c.id}`}>{c.name}</Link>{c.title && <div className="sub">{c.title}</div>}</td>
                     <td>{c.company ?? ""}</td>
                     <td><StatusSelect action={setStatus.bind(null, c.id)} current={c.status} options={STATUSES} label={`Status for ${c.name}`} /></td>
