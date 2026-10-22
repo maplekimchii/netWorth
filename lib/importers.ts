@@ -10,7 +10,7 @@ import { addContact, cleanName, type ContactFields, type Source } from "./data";
 // Field keys as shown in the mapping dropdown, and the contact column each one fills.
 export const FIELDS = [
   "name", "first_name", "last_name", "company", "title", "email", "linkedin_url", "how_connected", "notes",
-  "team", "school", "program", "grad_year",
+  "team", "school", "program", "grad_year", "source",
 ] as const;
 type Field = (typeof FIELDS)[number];
 const FIELD_KEY: Partial<Record<Field, Exclude<keyof ContactFields, "attributes">>> = {
@@ -40,6 +40,8 @@ export async function importRows(rows: Row[], mapping: Record<string, string>, s
     const fields: ContactFields = {};
     for (const [field, key] of Object.entries(FIELD_KEY)) fields[key] = f[field as Field] ?? "";
     fields.howConnected = fields.howConnected || howConnected;
+    // Where the sheet says the person was found (PitchBook, LinkedIn). contacts.source is how they entered this app.
+    if (f.source) fields.attributes = { source: f.source };
     if ((await addContact(name, source, f.company ?? "", fields)) === null) report.skipped++;
     else report.added++;
   }
@@ -83,6 +85,7 @@ async function relativeTableLinks(data: Buffer): Promise<Buffer> {
 
 export async function readTable(filename: string, data: Buffer, sheet?: string): Promise<Table> {
   let sheets: string[], grid: string[][];
+  const links: string[][] = [];
   if (filename.toLowerCase().endsWith(".csv")) {
     sheets = ["CSV"];
     grid = await csvGrid(data);
@@ -97,13 +100,22 @@ export async function readTable(filename: string, data: Buffer, sheet?: string):
     const ws = wb.worksheets.find((w) => w.name === sheet) ?? wb.worksheets[0];
     grid = [];
     ws?.eachRow({ includeEmpty: true }, (r) => {
-      grid.push(Array.from({ length: r.cellCount }, (_, i) => r.getCell(i + 1).text ?? ""));
+      const cells = Array.from({ length: r.cellCount }, (_, i) => r.getCell(i + 1));
+      grid.push(cells.map((c) => c.text ?? ""));
+      links.push(cells.map((c) => c.hyperlink ?? ""));
     });
   }
   const chosen = sheets.includes(sheet ?? "") ? sheet! : sheets[0];
   // Exports such as PitchBook put title rows above the header: take the first row with 2+ filled cells.
   const start = grid.findIndex((r) => r.filter((v) => v.trim()).length >= 2);
   if (start === -1) return { sheets, sheet: chosen, headers: [], rows: [] };
+  // A cell can show "Profile" over a LinkedIn URL. Offer each linked column's URLs as "<header> (link)".
+  const width = grid[start].length;
+  const linked = grid[start].map((_, i) => i).filter((i) => links.slice(start + 1).some((r) => r[i]));
+  if (linked.length) {
+    grid = grid.map((r, n) => [...Array.from({ length: width }, (_, i) => r[i] ?? ""),
+      ...linked.map((i) => (n === start ? `${grid[start][i].trim()} (link)` : links[n]?.[i] ?? ""))]);
+  }
   return { sheets, sheet: chosen, headers: grid[start].map((h) => h.trim()), rows: toRows(grid, start) };
 }
 

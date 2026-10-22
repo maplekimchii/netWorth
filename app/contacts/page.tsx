@@ -69,7 +69,7 @@ export default async function Contacts({ searchParams }: PageProps<"/contacts">)
                     <td>{c.nextFollowupDate && (
                       <span className={c.nextFollowupDate <= now && c.status === "sent" ? "late-text" : "sub"}>{niceDate(c.nextFollowupDate)}</span>
                     )}</td>
-                    <td className="sub">{label(c.source)}</td>
+                    <td className="sub">{c.attributes.source || label(c.source)}</td>
                   </tr>
                 ))}
               </tbody>

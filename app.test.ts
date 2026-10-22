@@ -278,6 +278,27 @@ describe("importers", () => {
     expect(t.rows).toEqual([{ Name: "Ann Lee", Company: "Figma" }]);
   });
 
+  it("offers the URL behind a linked cell as its own column", async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Sheet1");
+    ws.addRow(["Name", "LinkedIn", "Notes"]);
+    ws.addRow(["Ann Lee", { text: "Profile", hyperlink: "https://www.linkedin.com/in/ann" }, "met at a fair"]);
+    ws.addRow(["Bo Chan"]);
+    const t = await importers.readTable("people.xlsx", Buffer.from(await wb.xlsx.writeBuffer()));
+    expect(t.headers).toEqual(["Name", "LinkedIn", "Notes", "LinkedIn (link)"]);
+    expect(t.rows).toEqual([
+      { Name: "Ann Lee", LinkedIn: "Profile", Notes: "met at a fair", "LinkedIn (link)": "https://www.linkedin.com/in/ann" },
+      { Name: "Bo Chan", LinkedIn: "", Notes: "", "LinkedIn (link)": "" },
+    ]);
+  });
+
+  it("keeps a sheet's own Source column as a custom field, out of notes", async () => {
+    const rows = [{ Name: "Ann Lee", Source: "PitchBook" }];
+    expect((await importers.importRows(rows, { Name: "name", Source: "source" }, "import")).added).toBe(1);
+    const [c] = await data.listContacts({ q: "Ann Lee" });
+    expect([c.attributes, c.notes, c.source]).toEqual([{ source: "PitchBook" }, "", "import"]);
+  });
+
   it("rejects garbage instead of an .xlsx", async () => {
     await expect(importers.readTable("people.xlsx", Buffer.from("not an excel file"))).rejects.toThrow("Could not read");
   });
