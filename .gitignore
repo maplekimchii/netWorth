@@ -10,3 +10,7 @@
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# contact spreadsheets hold personal details
+*.xlsx
+*.csv

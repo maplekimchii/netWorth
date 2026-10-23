@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
+import * as schema from "@/db/schema";
 import * as data from "@/lib/data";
 import * as ai from "@/lib/ai";
 import * as importers from "@/lib/importers";
@@ -284,12 +285,29 @@ describe("importers", () => {
     ws.addRow(["Name", "LinkedIn", "Notes"]);
     ws.addRow(["Ann Lee", { text: "Profile", hyperlink: "https://www.linkedin.com/in/ann" }, "met at a fair"]);
     ws.addRow(["Bo Chan"]);
+    ws.addRow(["Cy Diaz", "https://ca.linkedin.com/in/cy", "typed, not linked"]);
     const t = await importers.readTable("people.xlsx", Buffer.from(await wb.xlsx.writeBuffer()));
     expect(t.headers).toEqual(["Name", "LinkedIn", "Notes", "LinkedIn (link)"]);
     expect(t.rows).toEqual([
       { Name: "Ann Lee", LinkedIn: "Profile", Notes: "met at a fair", "LinkedIn (link)": "https://www.linkedin.com/in/ann" },
       { Name: "Bo Chan", LinkedIn: "", Notes: "", "LinkedIn (link)": "" },
+      { Name: "Cy Diaz", LinkedIn: "https://ca.linkedin.com/in/cy", Notes: "typed, not linked", "LinkedIn (link)": "https://ca.linkedin.com/in/cy" },
     ]);
+  });
+
+  it("keeps columns mapped to custom field under their header under their header", async () => {
+    const rows = [{ Name: "Ann Lee", Function: "Private Equity", Level: "", Source: "LinkedIn" }];
+    await importers.importRows(rows, { Name: "name", Function: "custom_field", Level: "custom_field", Source: "source" }, "import");
+    const [c] = await data.listContacts({ q: "Ann Lee" });
+    expect(c.attributes).toEqual({ Function: "Private Equity", source: "LinkedIn" });
+  });
+
+  it("fills an empty company industry from the sheet, never overwriting one", async () => {
+    const map = { Name: "name", Company: "company", Industry: "industry" };
+    await importers.importRows([{ Name: "Ann Lee", Company: "Evercore", Industry: "Investment Banking" }], map, "import");
+    await importers.importRows([{ Name: "Bo Chan", Company: "evercore", Industry: "Asset Management" }], map, "import");
+    const [co] = await db.select().from(schema.companies);
+    expect([co.name, co.industry]).toEqual(["Evercore", "Investment Banking"]);
   });
 
   it("keeps a sheet's own Source column as a custom field, out of notes", async () => {

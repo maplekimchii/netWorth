@@ -2,15 +2,15 @@
 import { Readable } from "node:stream";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { eq, getTableColumns } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { db } from "@/db";
 import * as t from "@/db/schema";
-import { addContact, cleanName, type ContactFields, type Source } from "./data";
+import { addContact, cleanName, getOrCreateCompany, type ContactFields, type Source } from "./data";
 
 // Field keys as shown in the mapping dropdown, and the contact column each one fills.
 export const FIELDS = [
   "name", "first_name", "last_name", "company", "title", "email", "linkedin_url", "how_connected", "notes",
-  "team", "school", "program", "grad_year", "source",
+  "team", "school", "program", "grad_year", "source", "industry", "custom_field",
 ] as const;
 type Field = (typeof FIELDS)[number];
 const FIELD_KEY: Partial<Record<Field, Exclude<keyof ContactFields, "attributes">>> = {
@@ -29,8 +29,11 @@ export async function importRows(rows: Row[], mapping: Record<string, string>, s
   const report: Report = { added: 0, skipped: 0, failed: [] };
   for (const [i, row] of rows.entries()) {
     const f: Partial<Record<Field, string>> = {};
+    const custom: Record<string, string> = {}; // columns kept as-is under their header, e.g. {"Function": "Private Equity"}
     for (const [col, field] of Object.entries(mapping)) {
-      if ((FIELDS as readonly string[]).includes(field)) f[field as Field] = (row[col] ?? "").trim();
+      const v = (row[col] ?? "").trim();
+      if (field === "custom_field") { if (v) custom[col] = v; }
+      else if ((FIELDS as readonly string[]).includes(field)) f[field as Field] = v;
     }
     const name = f.name || `${f.first_name ?? ""} ${f.last_name ?? ""}`;
     if (!cleanName(name)) {
@@ -41,9 +44,16 @@ export async function importRows(rows: Row[], mapping: Record<string, string>, s
     for (const [field, key] of Object.entries(FIELD_KEY)) fields[key] = f[field as Field] ?? "";
     fields.howConnected = fields.howConnected || howConnected;
     // Where the sheet says the person was found (PitchBook, LinkedIn). contacts.source is how they entered this app.
-    if (f.source) fields.attributes = { source: f.source };
+    const attributes = { ...custom, ...(f.source ? { source: f.source } : {}) };
+    if (Object.keys(attributes).length) fields.attributes = attributes;
     if ((await addContact(name, source, f.company ?? "", fields)) === null) report.skipped++;
     else report.added++;
+    // Industry belongs to the company. Fill it only when empty, like AI enrichment does.
+    const companyId = f.industry && (await getOrCreateCompany(f.company));
+    if (companyId) {
+      await db.update(t.companies).set({ industry: f.industry })
+        .where(and(eq(t.companies.id, companyId), eq(t.companies.industry, "")));
+    }
   }
   return report;
 }
@@ -114,7 +124,9 @@ export async function readTable(filename: string, data: Buffer, sheet?: string):
   const linked = grid[start].map((_, i) => i).filter((i) => links.slice(start + 1).some((r) => r[i]));
   if (linked.length) {
     grid = grid.map((r, n) => [...Array.from({ length: width }, (_, i) => r[i] ?? ""),
-      ...linked.map((i) => (n === start ? `${grid[start][i].trim()} (link)` : links[n]?.[i] ?? ""))]);
+      // Rows that typed the URL instead of linking it fill the same column, so one mapping covers both.
+      ...linked.map((i) => (n === start ? `${grid[start][i].trim()} (link)`
+        : links[n]?.[i] || (/^https?:\/\//i.test(r[i]?.trim() ?? "") ? r[i].trim() : "")))]);
   }
   return { sheets, sheet: chosen, headers: grid[start].map((h) => h.trim()), rows: toRows(grid, start) };
 }
