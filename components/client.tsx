@@ -67,7 +67,7 @@ export function OpenInOutlook({ to, subject, body }: { to: string; subject: stri
     <a className="btn btn-sm" target="_blank" rel="noopener" href={tooLong ? composeUrl(to, subject, "") : full}
       title={tooLong ? "Body is copied to your clipboard: paste it into Outlook" : undefined}
       onClick={() => { if (tooLong) void navigator.clipboard.writeText(body); }}>
-      Open in Outlook{tooLong && " (paste body)"}
+      Send in Outlook{tooLong && " (paste body)"}
     </a>
   );
 }

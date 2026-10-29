@@ -18,6 +18,7 @@ export function DraftControls({ m, to }: { m: { id: number; subject: string; bod
     setSaved({ subject, body });
   };
   const save = () => start(persist);
+  const send = () => start(async () => { await persist(); await markSent(m.id); });
 
   // Warn before closing the tab with unsaved text (in-app links blur the field first, which saves).
   useEffect(() => {
@@ -39,9 +40,9 @@ export function DraftControls({ m, to }: { m: { id: number; subject: string; bod
         <button type="button" className="btn btn-sm btn-primary" disabled={!dirty || pending} onClick={save}>
           {pending ? "Saving…" : dirty ? "Save" : "Saved"}
         </button>
-        <span onClick={save}><OpenInOutlook to={to} subject={subject} body={body} /></span>
-        <button type="button" className="btn btn-sm" disabled={pending}
-          onClick={() => start(async () => { await persist(); await markSent(m.id); })}>Mark sent</button>
+        {/* Opening Outlook counts as sending: it saves and marks the draft sent in one click. */}
+        <span onClick={send}><OpenInOutlook to={to} subject={subject} body={body} /></span>
+        <button type="button" className="btn btn-sm" disabled={pending} onClick={send}>Mark sent</button>
         <span className="spacer" />
         <button type="button" className="btn btn-sm btn-ghost" disabled={pending}
           onClick={() => confirm("Delete this draft?") && start(() => deleteDraft(m.id))}>Delete</button>
