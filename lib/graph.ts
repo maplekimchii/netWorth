@@ -2,13 +2,13 @@
 import { label } from "./format";
 
 export const BUILTIN_LEVELS = [
-  "industry", "company", "team", "title", "school", "program", "grad_year", "status", "source", "how_connected",
+  "industry", "company", "team", "title", "school", "program", "grad_year", "location", "status", "source", "how_connected",
 ] as const;
 export const DEFAULT_LEVELS = ["industry", "company"];
 export const UNKNOWN = "Unknown";
 
 export type GraphContact = {
-  id: number; name: string; title: string; team: string; school: string; program: string; gradYear: number | null;
+  id: number; name: string; title: string; team: string; school: string; program: string; gradYear: number | null; location: string;
   status: string; source: string; howConnected: string; attributes: Record<string, string>;
   company: string | null; industry: string | null;
 };
@@ -23,7 +23,7 @@ export function levelLabel(level: string) {
 function value(c: GraphContact, level: string): string {
   const v: Record<string, unknown> = {
     industry: c.industry, company: c.company, team: c.team, title: c.title, school: c.school, program: c.program,
-    grad_year: c.gradYear, status: c.status && label(c.status), source: c.source && label(c.source), how_connected: c.howConnected,
+    grad_year: c.gradYear, location: c.location, status: c.status && label(c.status), source: c.source && label(c.source), how_connected: c.howConnected,
   };
   const raw = level in v ? v[level] : c.attributes[level.replace(/^attr:/, "")];
   const s = raw == null ? "" : String(raw).trim();

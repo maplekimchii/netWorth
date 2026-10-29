@@ -10,12 +10,12 @@ import { addContact, cleanName, getOrCreateCompany, type ContactFields, type Sou
 // Field keys as shown in the mapping dropdown, and the contact column each one fills.
 export const FIELDS = [
   "name", "first_name", "last_name", "company", "title", "email", "linkedin_url", "how_connected", "notes",
-  "team", "school", "program", "grad_year", "source", "industry", "custom_field",
+  "team", "school", "program", "grad_year", "location", "gender", "source", "industry", "custom_field",
 ] as const;
 type Field = (typeof FIELDS)[number];
 const FIELD_KEY: Partial<Record<Field, Exclude<keyof ContactFields, "attributes">>> = {
   title: "title", email: "email", linkedin_url: "linkedinUrl", how_connected: "howConnected", notes: "notes",
-  team: "team", school: "school", program: "program", grad_year: "gradYear",
+  team: "team", school: "school", program: "program", grad_year: "gradYear", location: "location", gender: "gender",
 };
 const LINKEDIN_MAPPING: Record<string, Field> = {
   "First Name": "first_name", "Last Name": "last_name", "Email Address": "email",

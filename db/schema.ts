@@ -55,6 +55,8 @@ export const contacts = pgTable("contacts", {
   school: text("school").notNull().default(""),
   program: text("program").notNull().default(""),
   gradYear: integer("grad_year"),
+  gender: text("gender").notNull().default(""), // "", "woman", "man", or "nonbinary"; picks Mr./Ms. in greetings
+  location: text("location").notNull().default(""),
   attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
   createdAt: createdAt(),
 });

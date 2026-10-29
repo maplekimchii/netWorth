@@ -11,6 +11,8 @@ export function ContactDetails({ c }: { c: NonNullable<Awaited<ReturnType<typeof
         : safeUrl(c.linkedinUrl) === "#" ? c.linkedinUrl
         : <a href={safeUrl(c.linkedinUrl)} target="_blank" rel="noopener">{c.linkedinUrl.replace("https://", "").replace("www.", "")}</a>}</dd></div>
       <div><dt>Team</dt><dd>{c.team || "—"}</dd></div>
+      <div><dt>Gender</dt><dd>{c.gender ? label(c.gender) : "—"}</dd></div>
+      <div><dt>Location</dt><dd>{c.location || "—"}</dd></div>
       <div><dt>School</dt><dd>{[c.school, c.program, c.gradYear].filter(Boolean).join(" · ") || "—"}</dd></div>
       <div><dt>How connected</dt><dd>{c.howConnected || "—"}</dd></div>
       <div><dt>Source</dt><dd>{c.attributes.source || label(c.source)}</dd></div>
@@ -24,7 +26,7 @@ export function Pill({ status, text }: { status: string; text?: string }) {
 }
 
 type Values = Partial<Record<"name" | "company" | "title" | "email" | "linkedinUrl" | "howConnected" | "notes"
-  | "team" | "school" | "program" | "gradYear", string | number | null>> & { attributes?: Record<string, string> };
+  | "team" | "school" | "program" | "gradYear" | "gender" | "location", string | number | null>> & { attributes?: Record<string, string> };
 
 /** Shared by Add contact, Edit details, and the parsed-profile form. */
 export function ContactFormFields({ v = {}, notes = false }: { v?: Values; notes?: boolean }) {
@@ -35,6 +37,12 @@ export function ContactFormFields({ v = {}, notes = false }: { v?: Values; notes
       <label className="field"><span>Company</span><input name="company" defaultValue={d("company")} /></label>
       <label className="field"><span>Title</span><input name="title" defaultValue={d("title")} /></label>
       <label className="field"><span>Team</span><input name="team" defaultValue={d("team")} /></label>
+      <label className="field"><span>Gender <span className="hint">sets Mr./Ms. for VPs and above</span></span>
+        <select name="gender" defaultValue={d("gender")}>
+          <option value="">Not set</option><option value="woman">Woman (Ms.)</option>
+          <option value="man">Man (Mr.)</option><option value="nonbinary">Non-binary (full name)</option>
+        </select></label>
+      <label className="field"><span>Location</span><input name="location" defaultValue={d("location")} placeholder="e.g. Toronto" /></label>
       <label className="field"><span>Email</span><input name="email" type="email" defaultValue={d("email")} /></label>
       <label className="field"><span>LinkedIn URL</span><input name="linkedinUrl" defaultValue={d("linkedinUrl")} /></label>
       <label className="field"><span>School</span><input name="school" defaultValue={d("school")} /></label>

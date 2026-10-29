@@ -108,7 +108,7 @@ Reply with only a JSON object mapping each slot name to its text.`);
 }
 
 export type DraftContact = {
-  name: string; title: string; company: string | null; howConnected: string; notes: string;
+  name: string; title: string; company: string | null; howConnected: string; notes: string; gender: string; location: string;
 };
 export type DraftCompany = { name: string; notes: string; news: string } | null;
 export type PriorMessage = { subject: string; body: string; sentAt: Date | null };
@@ -116,6 +116,7 @@ export type PriorMessage = { subject: string; body: string; sentAt: Date | null 
 function context(p: Profile, c: DraftContact, co: DraftCompany, prior: PriorMessage[]) {
   const lines = [me(p), `My resume:\n${p.resumeText}`, "",
     `Contact: ${c.name}, ${c.title || "title unknown"} at ${c.company || "unknown company"}`,
+    `Location: ${c.location || "unknown"}`,
     `How we're connected: ${c.howConnected || "not connected"}`,
     `Notes on them: ${c.notes || "none"}`];
   if (co) lines.push(`Why I'm interested in ${co.name}: ${co.notes || "none"}`, `Recent news:\n${co.news || "none"}`);
@@ -137,7 +138,7 @@ ${profile.voiceSamples || "(none provided: write plainly and warmly)"}
 
 Write one networking email from me to ${contact.name}. Instruction: ${instruction || "a short, personable note asking for a 15-minute chat"}
 Keep it under 150 words, sign it with my name, and use only facts from the context.
-Greeting: for a VP or above, use "Mr." or "Ms." and their last name only if their pronouns or gender are stated in the context, otherwise their full name; for anyone else, their first name.
+Greet them as: ${dataValues(profile, contact).greeting_name}
 
 Reply with only a JSON object: {"subject": "", "body": ""}`);
   return { subject: str(data.subject), body: str(data.body) };

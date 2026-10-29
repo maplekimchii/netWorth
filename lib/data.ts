@@ -51,8 +51,18 @@ export async function contactExists(name: string, company = "") {
 }
 
 export const CONTACT_TEXT_FIELDS = [
-  "title", "email", "linkedinUrl", "howConnected", "notes", "team", "school", "program",
+  "title", "email", "linkedinUrl", "howConnected", "notes", "team", "school", "program", "location", "gender",
 ] as const;
+export const GENDERS = ["woman", "man", "nonbinary"] as const;
+
+/** Map what people type or import ("F", "Female", "Ms") to a GENDERS value, or "" when unclear. */
+export function normGender(v: string): string {
+  const s = v.trim().toLowerCase().replace(/\.$/, "");
+  if (["woman", "female", "f", "w", "ms", "mrs", "miss", "she", "she/her"].includes(s)) return "woman";
+  if (["man", "male", "m", "mr", "he", "he/him"].includes(s)) return "man";
+  if (["nonbinary", "non-binary", "nb", "they", "they/them"].includes(s)) return "nonbinary";
+  return "";
+}
 export type ContactFields = Partial<Record<(typeof CONTACT_TEXT_FIELDS)[number], string>> & {
   gradYear?: string; attributes?: Record<string, string>;
 };
@@ -72,6 +82,7 @@ function contactValues(f: ContactFields) {
   const year = Number.parseInt(f.gradYear ?? "", 10);
   return {
     ...Object.fromEntries(CONTACT_TEXT_FIELDS.map((k) => [k, (f[k] ?? "").trim()])),
+    gender: normGender(f.gender ?? ""),
     gradYear: Number.isFinite(year) ? year : null,
     ...(f.attributes ? { attributes: f.attributes } : {}),
   } as Record<(typeof CONTACT_TEXT_FIELDS)[number], string> & { gradYear: number | null; attributes?: Record<string, string> };

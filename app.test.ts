@@ -197,7 +197,7 @@ describe("templating", () => {
 
 describe("ai", () => {
   const profile = { name: "Alex Lee", program: "CS", targetRoles: "Product, eng", voiceSamples: "hey!", story: "", resumeText: "", followupDays: 5 };
-  const contact = { name: "Cher", title: "", company: "Stripe", howConnected: "", notes: "" };
+  const contact = { name: "Cher", title: "", company: "Stripe", howConnected: "", notes: "", gender: "", location: "" };
 
   it("fills data first, then sends only the slots to the AI", async () => {
     process.env.OPENAI_API_KEY = "test";
@@ -211,15 +211,17 @@ describe("ai", () => {
     expect(openaiCalls[0].tools).toBeUndefined();
   });
 
-  it("greets VPs and above by honorific, others by first name", async () => {
+  it("greets VPs and above by honorific from their gender, others by first name", async () => {
     const tpl = { subject: "Hi", body: "Hi {greeting_name}," };
-    expect(await ai.draft(tpl, profile, { ...contact, name: "Jane Doe", title: "Senior PM" }, null, []))
-      .toEqual({ subject: "Hi", body: "Hi Jane," });
-    process.env.OPENAI_API_KEY = "test";
-    openaiReply = '{"greeting_name": "Ms. Doe"}';
-    expect(await ai.draft(tpl, profile, { ...contact, name: "Jane Doe", title: "VP, Product" }, null, []))
-      .toEqual({ subject: "Hi", body: "Hi Ms. Doe," });
-    expect(String(openaiCalls[0].input)).toContain('Otherwise write "Jane Doe"');
+    const greet = async (title: string, gender: string) =>
+      (await ai.draft(tpl, profile, { ...contact, name: "Jane Doe", title, gender }, null, [])).body;
+    expect(await greet("Senior PM", "woman")).toBe("Hi Jane,");
+    expect(await greet("VP, Product", "woman")).toBe("Hi Ms. Doe,");
+    expect(await greet("Chief of Staff", "man")).toBe("Hi Mr. Doe,");
+    expect(await greet("SVP Sales", "")).toBe("Hi Jane Doe,");
+    expect(openaiCalls).toHaveLength(0);
+    expect([data.normGender("F"), data.normGender("Mr."), data.normGender("they/them"), data.normGender("?")])
+      .toEqual(["woman", "man", "nonbinary", ""]);
   });
 
   it("makes no AI call for a template without slots", async () => {
@@ -467,7 +469,7 @@ describe("batch jobs", () => {
 
 describe("network graph", () => {
   const person = (id: number, name: string, extra: Partial<GraphContact> = {}): GraphContact => ({
-    id, name, title: "", team: "", school: "", program: "", gradYear: null, status: "to_contact", source: "paste",
+    id, name, title: "", team: "", school: "", program: "", gradYear: null, location: "", status: "to_contact", source: "paste",
     howConnected: "", attributes: {}, company: null, industry: null, ...extra,
   });
   const people = [
