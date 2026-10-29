@@ -1,4 +1,23 @@
-import { label } from "@/lib/format";
+import type { getContact } from "@/lib/data";
+import { label, safeUrl } from "@/lib/format";
+
+/** Read-only contact facts. Shared by the Contact and Drafts pages. */
+export function ContactDetails({ c }: { c: NonNullable<Awaited<ReturnType<typeof getContact>>> }) {
+  return (
+    <dl className="kv">
+      <div><dt>Email</dt><dd>{c.email || <span className="muted">None</span>}</dd></div>
+      <div><dt>LinkedIn</dt><dd>{!c.linkedinUrl ? <span className="muted">None</span>
+        // "#" means not a real URL (e.g. "Profile" from a sheet): a link would only reopen this page.
+        : safeUrl(c.linkedinUrl) === "#" ? c.linkedinUrl
+        : <a href={safeUrl(c.linkedinUrl)} target="_blank" rel="noopener">{c.linkedinUrl.replace("https://", "").replace("www.", "")}</a>}</dd></div>
+      <div><dt>Team</dt><dd>{c.team || "—"}</dd></div>
+      <div><dt>School</dt><dd>{[c.school, c.program, c.gradYear].filter(Boolean).join(" · ") || "—"}</dd></div>
+      <div><dt>How connected</dt><dd>{c.howConnected || "—"}</dd></div>
+      <div><dt>Source</dt><dd>{c.attributes.source || label(c.source)}</dd></div>
+      <div><dt>Notes</dt><dd><pre>{c.notes || "—"}</pre></dd></div>
+    </dl>
+  );
+}
 
 export function Pill({ status, text }: { status: string; text?: string }) {
   return <span className={`pill s-${status}`}>{text ?? label(status)}</span>;

@@ -226,3 +226,14 @@ details.edit[open] + .kv { display: none; }
 .banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); font-size: 13px; margin-bottom: 20px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .prose-news { white-space: pre-wrap; line-height: 1.6; }
+
+/* ---------- Drafts: list | email | person ---------- */
+.drafts-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+.drafts-layout nav { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.drafts-layout .list a { color: inherit; min-width: 0; }
+.drafts-layout .list > li.selected { background: var(--accent-soft); }
+.email-body { padding: 14px 16px; background: var(--bg); border: 1px solid var(--line-soft); border-radius: var(--radius-sm); line-height: 1.6; }
+@media (max-width: 1000px) {
+  .drafts-layout { grid-template-columns: minmax(0, 1fr); }
+  .drafts-layout nav { position: static; max-height: 240px; }
+}
