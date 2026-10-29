@@ -105,6 +105,17 @@ export async function deleteDraft(messageId: number) {
   refresh();
 }
 
+export async function deleteDrafts(fd: FormData) {
+  await requireUser();
+  const ids = fd.has("all") ? (await data.listDrafts()).map((d) => d.m.id)
+    : fd.getAll("id").map(Number).filter(Number.isInteger);
+  if (!ids.length) go("/drafts", "Tick the drafts to delete first.");
+  // ponytail: one delete per draft so each contact's status resets; batch it if draft counts get large.
+  for (const id of ids) await data.deleteDraft(id);
+  refresh();
+  go("/drafts", `Deleted ${plural(ids.length, "draft")}.`);
+}
+
 export async function markSent(messageId: number) {
   await requireUser();
   await data.markSent(messageId);

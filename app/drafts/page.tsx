@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
+import { deleteDrafts } from "@/app/actions";
+import { ConfirmButton } from "@/components/client";
 import { DraftControls } from "@/components/drafts";
 import { ContactDetails, Pill } from "@/components/ui";
 import { db } from "@/db";
@@ -27,9 +29,15 @@ export default async function Drafts({ searchParams }: PageProps<"/drafts">) {
       {sel && c ? (
         <div className="drafts-layout">
           <nav className="card" aria-label="Drafts">
+            <form id="bulk" action={deleteDrafts} className="card-body row" style={{ borderBottom: "1px solid var(--line-soft)" }}>
+              <ConfirmButton className="btn btn-sm" confirm="Delete the ticked drafts?">Delete selected</ConfirmButton>
+              <ConfirmButton className="btn btn-sm btn-ghost" name="all" value="1"
+                confirm="Delete ALL unsent drafts? This can't be undone.">Delete all</ConfirmButton>
+            </form>
             <ul className="list">
               {drafts.map(({ m, name, company }) => (
                 <li key={m.id} className={m.id === sel.m.id ? "selected" : ""}>
+                  <input type="checkbox" form="bulk" name="id" value={m.id} aria-label={`Select draft to ${name}`} />
                   <Link className="grow" href={`/drafts?id=${m.id}`} aria-current={m.id === sel.m.id ? "page" : undefined}>
                     <div className="title">{name}</div>
                     <div className="sub">{company ?? "No company"} · {m.kind === "followup" ? "follow-up" : "first email"}</div>
