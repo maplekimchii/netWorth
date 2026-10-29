@@ -62,8 +62,8 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
                         {m.sentAt ? ` · sent ${niceDate(m.sentAt)}` : " · not sent"}
                         {m.repliedAt && ` · replied ${niceDate(m.repliedAt)}`}
                       </div>
-                      <details><summary>Show email</summary><pre>{m.body}</pre></details>
-                      {!m.sentAt && <DraftControls m={m} to={c.email} />}
+                      {m.sentAt ? <details><summary>Show email</summary><pre>{m.body}</pre></details>
+                        : <DraftControls m={m} to={c.email} />}
                       {latest && !m.repliedAt && (
                         <div className="row actions">
                           <form className="inline" action={markReplied.bind(null, m.id)}><button className="btn btn-sm">Mark replied</button></form>

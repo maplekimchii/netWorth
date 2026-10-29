@@ -93,9 +93,9 @@ export async function saveDraft(contactId: number, fd: FormData) {
   go(`/contacts/${contactId}`, "Draft saved.");
 }
 
-export async function updateDraft(messageId: number, fd: FormData) {
+export async function updateDraft(messageId: number, subject: string, body: string) {
   await requireUser();
-  await data.updateDraft(messageId, s(fd, "subject"), String(fd.get("body") ?? ""));
+  await data.updateDraft(messageId, String(subject).trim(), String(body));
   refresh();
 }
 

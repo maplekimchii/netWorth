@@ -28,7 +28,7 @@ export default async function Drafts({ searchParams }: PageProps<"/drafts">) {
       </div>
       {sel && c ? (
         <div className="drafts-layout">
-          <nav className="card" aria-label="Drafts">
+          <nav className="card drafts-list" aria-label="Drafts">
             <form id="bulk" action={deleteDrafts} className="card-body row" style={{ borderBottom: "1px solid var(--line-soft)" }}>
               <ConfirmButton className="btn btn-sm" confirm="Delete the ticked drafts?">Delete selected</ConfirmButton>
               <ConfirmButton className="btn btn-sm btn-ghost" name="all" value="1"
@@ -47,20 +47,17 @@ export default async function Drafts({ searchParams }: PageProps<"/drafts">) {
             </ul>
           </nav>
 
-          <section className="card" aria-labelledby="email-h">
-            <div className="card-head">
-              <h2 id="email-h">{sel.m.subject || "(no subject)"}</h2>
-              <span className="meta">drafted {niceDate(sel.m.createdAt)}</span>
-            </div>
-            <div className="card-body stack" style={{ gap: 12 }}>
-              <div className="muted small">To: {sel.email || "no email on file"}</div>
-              <pre className="email-body">{sel.m.body}</pre>
-              {/* key resets the edit form when switching drafts */}
-              <div key={sel.m.id}><DraftControls m={sel.m} to={sel.email} /></div>
+          <section className="card drafts-email" aria-label="Email">
+            <div className="card-body">
+              <div className="muted small">
+                To: {sel.email || "no email on file"} · {sel.m.kind === "followup" ? "follow-up" : "first email"} · drafted {niceDate(sel.m.createdAt)}
+              </div>
+              {/* key resets the editor when switching drafts */}
+              <DraftControls key={sel.m.id} m={sel.m} to={sel.email} />
             </div>
           </section>
 
-          <aside className="stack">
+          <aside className="stack drafts-person">
             <section className="card" aria-labelledby="person-h">
               <div className="card-head">
                 <h2 id="person-h"><Link href={`/contacts/${c.id}`}>{c.name}</Link></h2>
