@@ -58,11 +58,15 @@ export function NavLink({ href, children, count }: { href: string; children: Rea
 
 
 /** Opens the email in Outlook on the web. A body too long for a URL is copied to the clipboard instead. */
-/** Text passed in an Outlook link takes Outlook's odd default style, so the body goes to the
- * clipboard as Aptos 12pt black HTML instead, and the user pastes it into the empty message. */
+// Outlook web styles typed text per line (<div class="elementToProof" style=...>) but inserts a link's
+// body as a bare, unstyled node, so it shows in the editor's base font. Copy the body in Outlook's own markup instead.
+const OUTLOOK_STYLE = "font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; "
+  + "font-size: 12pt; color: rgb(0, 0, 0);";
+
 function copyBody(body: string) {
-  const esc = body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
-  const html = `<div style="font-family: Aptos, Calibri, Helvetica, sans-serif; font-size: 12pt; color: #000000;">${esc}</div>`;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const html = body.split("\n")
+    .map((line) => `<div class="elementToProof" style="${OUTLOOK_STYLE}">${esc(line) || "<br>"}</div>`).join("");
   void navigator.clipboard.write([new ClipboardItem({
     "text/html": new Blob([html], { type: "text/html" }),
     "text/plain": new Blob([body], { type: "text/plain" }),
