@@ -254,6 +254,9 @@ details.edit[open] + .kv { display: none; }
   .drafts-list { position: static; max-height: 220px; }
 }
 
+.tabs { margin-bottom: 16px; }
+.email-sent { padding: 12px 14px; line-height: 1.6; background: var(--bg); border: 1px solid var(--line-soft); border-radius: var(--radius-sm); }
+
 /* Inline email editor: reads like an open message, not a form. */
 .email-editor { display: flex; flex-direction: column; gap: 10px; }
 .email-editor .email-subject { height: 40px; font-size: 16px; font-weight: 600; }

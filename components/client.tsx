@@ -56,18 +56,24 @@ export function NavLink({ href, children, count }: { href: string; children: Rea
   );
 }
 
-// ponytail: 2,000 is the conservative URL length every browser and Outlook accepts; past it the body goes via clipboard.
-const MAX_URL = 2000;
 
 /** Opens the email in Outlook on the web. A body too long for a URL is copied to the clipboard instead. */
+/** Text passed in an Outlook link takes Outlook's odd default style, so the body goes to the
+ * clipboard as Aptos 12pt black HTML instead, and the user pastes it into the empty message. */
+function copyBody(body: string) {
+  const esc = body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+  const html = `<div style="font-family: Aptos, Calibri, Helvetica, sans-serif; font-size: 12pt; color: #000000;">${esc}</div>`;
+  void navigator.clipboard.write([new ClipboardItem({
+    "text/html": new Blob([html], { type: "text/html" }),
+    "text/plain": new Blob([body], { type: "text/plain" }),
+  })]);
+}
+
 export function OpenInOutlook({ to, subject, body }: { to: string; subject: string; body: string }) {
-  const full = composeUrl(to, subject, body);
-  const tooLong = full.length > MAX_URL;
   return (
-    <a className="btn btn-sm" target="_blank" rel="noopener" href={tooLong ? composeUrl(to, subject, "") : full}
-      title={tooLong ? "Body is copied to your clipboard: paste it into Outlook" : undefined}
-      onClick={() => { if (tooLong) void navigator.clipboard.writeText(body); }}>
-      Send in Outlook{tooLong && " (paste body)"}
+    <a className="btn btn-sm btn-primary" target="_blank" rel="noopener" href={composeUrl(to, subject, "")}
+      title="Body is copied: paste it into the message with Cmd/Ctrl+V" onClick={() => copyBody(body)}>
+      Send in Outlook (paste body)
     </a>
   );
 }

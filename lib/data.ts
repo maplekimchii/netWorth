@@ -1,5 +1,5 @@
 // Storage rules for netWorth: duplicates, status transitions, follow-up dates. Port of v1 db.py.
-import { and, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications, companies, contactSource, contactStatus, appStatus, contacts, messages, profile,
@@ -162,11 +162,25 @@ export async function deleteDraft(messageId: number) {
     .where(and(eq(contacts.id, m.contactId), eq(contacts.status, "drafted")));
 }
 
-export async function listDrafts() {
+/** Unsent drafts, newest first; or with `sent`, sent emails, most recently sent first. */
+export async function listDrafts(sent = false) {
   return db.select({ m: messages, name: contacts.name, email: contacts.email, company: companies.name })
     .from(messages).innerJoin(contacts, eq(contacts.id, messages.contactId))
     .leftJoin(companies, eq(companies.id, contacts.companyId))
-    .where(isNull(messages.sentAt)).orderBy(desc(messages.createdAt));
+    .where(sent ? isNotNull(messages.sentAt) : isNull(messages.sentAt))
+    .orderBy(sent ? desc(messages.sentAt) : desc(messages.createdAt));
+}
+
+/** Undo markSent (e.g. Outlook was opened but the email never went out). Replied emails stay sent. */
+export async function markUnsent(messageId: number) {
+  const [m] = await db.update(messages).set({ sentAt: null })
+    .where(and(eq(messages.id, messageId), isNotNull(messages.sentAt), isNull(messages.repliedAt)))
+    .returning({ contactId: messages.contactId, kind: messages.kind });
+  if (!m) return;
+  await db.update(contacts).set({
+    status: "drafted", nextFollowupDate: null,
+    followupCount: sql`greatest(${contacts.followupCount} - ${m.kind === "followup" ? 1 : 0}, 0)`,
+  }).where(and(eq(contacts.id, m.contactId), eq(contacts.status, "sent")));
 }
 
 export async function markSent(messageId: number, sentAt = new Date()) {

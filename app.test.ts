@@ -69,6 +69,11 @@ describe("data rules", () => {
     await data.markSent(mid, new Date("2026-10-01T09:00:00Z"));
     const c = (await data.getContact(cid))!;
     expect([c.status, c.nextFollowupDate, c.followupCount]).toEqual(["sent", "2026-10-06", 0]);
+    expect((await data.listDrafts(true)).map((d) => d.m.id)).toEqual([mid]);
+    await data.markUnsent(mid);
+    const u = (await data.getContact(cid))!;
+    expect([u.status, u.nextFollowupDate]).toEqual(["drafted", null]);
+    expect((await data.listDrafts()).map((d) => d.m.id)).toEqual([mid]);
   });
 
   it("uses the follow-up days setting", async () => {

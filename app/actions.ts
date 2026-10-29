@@ -122,6 +122,12 @@ export async function markSent(messageId: number) {
   refresh();
 }
 
+export async function markUnsent(messageId: number) {
+  await requireUser();
+  await data.markUnsent(messageId);
+  refresh();
+}
+
 export async function markReplied(messageId: number) {
   await requireUser();
   await data.markReplied(messageId);
