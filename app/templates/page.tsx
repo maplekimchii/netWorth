@@ -6,7 +6,7 @@ import { emailTemplates } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 
 export const metadata = { title: "Email templates" };
-const DATA_FIELDS = ["first_name", "last_name", "company", "title", "my_name", "my_program", "target_role"];
+const DATA_FIELDS = ["greeting_name", "first_name", "last_name","company", "title", "my_name", "my_program", "target_role"];
 
 export default async function Templates() {
   await requireUser();

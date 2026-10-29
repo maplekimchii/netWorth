@@ -37,11 +37,23 @@ export type Profile = {
   targetRoles: string; voiceSamples: string; followupDays: number;
 };
 
+// ponytail: title keyword match, so "Assistant to the CEO" counts as senior; add a seniority field if that bites.
+const SENIOR = /\b(vp|svp|evp|vice president|president|chief|ceo|cto|cfo|coo|cmo|cio|cpo|founder|co-founder|partner|managing director|chair\w*)\b/i;
+
+/** VPs and above get "Mr./Ms. Last" (picked by the AI from the context); everyone else gets their first name. */
+function greetingName(first: string, last: string, fullName: string, title: string) {
+  if (!SENIOR.test(title) || !last) return first;
+  return `[[greeting_name: "Mr. ${last}" or "Ms. ${last}", only if their pronouns or gender are stated in the context; `
+    + `never guess from the name. Otherwise write "${fullName}". Write only the name.]]`;
+}
+
 export function dataValues(profile: Profile, contact: { name: string; company: string | null; title: string }) {
   const parts = contact.name.split(/\s+/).filter(Boolean);
+  const first = parts[0] ?? "", last = parts.length > 1 ? parts[parts.length - 1] : "";
   return {
-    first_name: parts[0] ?? "",
-    last_name: parts.length > 1 ? parts[parts.length - 1] : "",
+    first_name: first,
+    last_name: last,
+    greeting_name: greetingName(first, last, parts.join(" "), contact.title),
     company: contact.company ?? "",
     title: contact.title,
     my_name: profile.name,

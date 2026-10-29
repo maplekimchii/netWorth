@@ -207,7 +207,19 @@ describe("ai", () => {
     const input = String(openaiCalls[0].input);
     expect(input).toContain('- "hook": about Stripe');
     expect(input).toContain("hey!");
+    expect(input).toContain("<template>\nSubject: Product at Stripe\n\nHi Cher,\n[[hook: about Stripe]]");
     expect(openaiCalls[0].tools).toBeUndefined();
+  });
+
+  it("greets VPs and above by honorific, others by first name", async () => {
+    const tpl = { subject: "Hi", body: "Hi {greeting_name}," };
+    expect(await ai.draft(tpl, profile, { ...contact, name: "Jane Doe", title: "Senior PM" }, null, []))
+      .toEqual({ subject: "Hi", body: "Hi Jane," });
+    process.env.OPENAI_API_KEY = "test";
+    openaiReply = '{"greeting_name": "Ms. Doe"}';
+    expect(await ai.draft(tpl, profile, { ...contact, name: "Jane Doe", title: "VP, Product" }, null, []))
+      .toEqual({ subject: "Hi", body: "Hi Ms. Doe," });
+    expect(String(openaiCalls[0].input)).toContain('Otherwise write "Jane Doe"');
   });
 
   it("makes no AI call for a template without slots", async () => {

@@ -86,15 +86,21 @@ const SLOT_SYSTEM = "You write short passages for the user's networking emails, 
   + "not marketing copy: be specific, skip flattery and filler, and never invent facts that are not in "
   + "the context.";
 
-async function fillSlots(slots: Record<string, string>, context: string, voiceSamples: string, extra: string) {
+async function fillSlots(
+  slots: Record<string, string>, template: string, context: string, voiceSamples: string, extra: string,
+) {
   const spec = Object.entries(slots).map(([k, v]) => `- "${k}": ${v}`).join("\n");
   const data = await askJson(SLOT_SYSTEM, `${context}
+
+<template>
+${template}
+</template>
 
 <voice_samples>
 ${voiceSamples || "(none provided: write plainly and warmly)"}
 </voice_samples>
 ${extra ? `\nExtra instruction from me for this email: ${extra}\n` : ""}
-Write the text for each slot below. Each slot is dropped into a fixed email template, so write only the slot text: no greeting, no sign-off.
+Write the text for each slot below. Each slot replaces its [[name: ...]] marker in the template above, and the rest of the template is sent as written, so write only the slot text: no greeting, no sign-off, and nothing that repeats the template around it.
 ${spec}
 
 Reply with only a JSON object mapping each slot name to its text.`);
@@ -131,6 +137,7 @@ ${profile.voiceSamples || "(none provided: write plainly and warmly)"}
 
 Write one networking email from me to ${contact.name}. Instruction: ${instruction || "a short, personable note asking for a 15-minute chat"}
 Keep it under 150 words, sign it with my name, and use only facts from the context.
+Greeting: for a VP or above, use "Mr." or "Ms." and their last name only if their pronouns or gender are stated in the context, otherwise their full name; for anyone else, their first name.
 
 Reply with only a JSON object: {"subject": "", "body": ""}`);
   return { subject: str(data.subject), body: str(data.body) };
@@ -162,9 +169,10 @@ export async function draft(
 ): Promise<{ subject: string; body: string }> {
   const values = dataValues(profile, contact);
   let subject = fillData(template.subject, values), body = fillData(template.body, values);
-  const slots = extractSlots(`${subject}\n${body}`);
+  const filledTemplate = `Subject: ${subject}\n\n${body}`;
+  const slots = extractSlots(filledTemplate);
   if (Object.keys(slots).length) {
-    const filled = await fillSlots(slots, context(profile, contact, company, prior), profile.voiceSamples, extra);
+    const filled = await fillSlots(slots, filledTemplate, context(profile, contact, company, prior), profile.voiceSamples, extra);
     subject = applySlots(subject, filled);
     body = applySlots(body, filled);
   }
