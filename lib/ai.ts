@@ -82,9 +82,9 @@ export async function researchCompany(name: string): Promise<string> {
   return bullets.map((b) => `- ${str(b)}`).join("\n");
 }
 
-const SLOT_SYSTEM = "You write short passages for the user's networking emails, in the user's own voice. Match the tone, "
-  + "sentence length, and word choice of the voice samples. Sound like a real person writing one email, "
-  + "not marketing copy: be specific, skip flattery and filler, and never invent facts that are not in "
+const SLOT_SYSTEM = "You fill in short passages for the user's networking emails, in the user's own voice. Reference the tone "
+  + "and word choice of the voice samples. Sound professional and like a real person writing one email, "
+  + "not a spam bot: skip flattery and filler, and never invent facts that are not in "
   + "the context.";
 
 async function fillSlots(
