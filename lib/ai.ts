@@ -3,8 +3,9 @@ import OpenAI from "openai";
 import {
   AIError, applySlots, dataValues, extractSlots, fillData, parseJson, type Profile,
 } from "./templating";
+import { TZ } from "./format";
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-6-luna";
+const MODEL = process.env.OPENAI_MODEL || "gpt-6.1-terra";
 
 let client: OpenAI | undefined;
 function openai() {
@@ -87,10 +88,12 @@ const SLOT_SYSTEM = "You write short passages for the user's networking emails, 
   + "the context.";
 
 async function fillSlots(
-  slots: Record<string, string>, template: string, context: string, voiceSamples: string, extra: string,
+  slots: Record<string, string>, template: string, context: string, occasion: string, voiceSamples: string, extra: string,
 ) {
   const spec = Object.entries(slots).map(([k, v]) => `- "${k}": ${v}`).join("\n");
   const data = await askJson(SLOT_SYSTEM, `${context}
+
+Occasion: ${occasion}
 
 <template>
 ${template}
@@ -126,24 +129,6 @@ function context(p: Profile, c: DraftContact, co: DraftCompany, prior: PriorMess
   return lines.join("\n");
 }
 
-/** Write a whole email from a one-off instruction, for batch jobs run without a template. */
-export async function freeDraft(
-  instruction: string, profile: Profile, contact: DraftContact, company: DraftCompany, prior: PriorMessage[],
-): Promise<{ subject: string; body: string }> {
-  const data = await askJson(SLOT_SYSTEM, `${context(profile, contact, company, prior)}
-
-<voice_samples>
-${profile.voiceSamples || "(none provided: write plainly and warmly)"}
-</voice_samples>
-
-Write one networking email from me to ${contact.name}. Instruction: ${instruction || "a short, personable note asking for a 15-minute chat"}
-Keep it under 150 words, sign it with my name, and use only facts from the context.
-Greet them as: ${dataValues(profile, contact).greeting_name}
-
-Reply with only a JSON object: {"subject": "", "body": ""}`);
-  return { subject: str(data.subject), body: str(data.body) };
-}
-
 export const ENRICH_FIELDS = ["industry", "team", "school", "program", "grad_year"] as const;
 export type Enriched = Record<(typeof ENRICH_FIELDS)[number], string>;
 
@@ -163,9 +148,17 @@ Reply with only a JSON object:
   return Object.fromEntries(ENRICH_FIELDS.map((k) => [k, str(data[k])])) as Enriched;
 }
 
+/** One line telling the AI whether this is a first email or a follow-up, and which template it fills. */
+export function occasion(template: { name: string; kind: string }, contact: { name: string }, prior: PriorMessage[]) {
+  if (template.kind !== "followup") return `first email to ${contact.name} (template "${template.name}")`;
+  const last = prior.filter((m) => m.sentAt).at(-1)?.sentAt;
+  const when = last ? ` on ${last.toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric" })}` : "";
+  return `follow-up; I emailed ${contact.name}${when} and have had no reply (template "${template.name}")`;
+}
+
 /** Fill a template for one contact. `extra` is an optional one-off instruction (used by batch jobs). */
 export async function draft(
-  template: { subject: string; body: string }, profile: Profile, contact: DraftContact,
+  template: { name: string; kind: "initial" | "followup"; subject: string; body: string }, profile: Profile, contact: DraftContact,
   company: DraftCompany, prior: PriorMessage[], extra = "",
 ): Promise<{ subject: string; body: string }> {
   const values = dataValues(profile, contact);
@@ -173,7 +166,8 @@ export async function draft(
   const filledTemplate = `Subject: ${subject}\n\n${body}`;
   const slots = extractSlots(filledTemplate);
   if (Object.keys(slots).length) {
-    const filled = await fillSlots(slots, filledTemplate, context(profile, contact, company, prior), profile.voiceSamples, extra);
+    const filled = await fillSlots(slots, filledTemplate, context(profile, contact, company, prior),
+      occasion(template, contact, prior), profile.voiceSamples, extra);
     subject = applySlots(subject, filled);
     body = applySlots(body, filled);
   }

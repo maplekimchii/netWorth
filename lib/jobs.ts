@@ -10,6 +10,7 @@ export type JobKind = "draft" | "enrich";
 
 export async function createJob(kind: JobKind, instruction: string, templateId: number | null, contactIds: number[]) {
   if (!contactIds.length) throw new Error("Pick at least one contact.");
+  if (kind === "draft" && !templateId) throw new Error("Pick a template.");
   const [job] = await db.insert(jobs).values({ kind, instruction, templateId }).returning({ id: jobs.id });
   await db.insert(jobItems).values(contactIds.map((contactId) => ({ jobId: job.id, contactId })));
   return job.id;
@@ -76,11 +77,9 @@ async function draftItem(job: typeof jobs.$inferSelect, contactId: number) {
   const [co] = c.companyId ? await db.select().from(companies).where(eq(companies.id, c.companyId)) : [];
   const profile = await getProfile();
   const [tpl] = job.templateId ? await db.select().from(emailTemplates).where(eq(emailTemplates.id, job.templateId)) : [];
-  const { subject, body } = tpl
-    ? await ai.draft(tpl, profile, c, co ?? null, prior, job.instruction)
-    : await ai.freeDraft(job.instruction, profile, c, co ?? null, prior);
-  const kind = tpl?.kind ?? (prior.some((m) => m.sentAt) ? "followup" : "initial");
-  return { status: "done" as const, messageId: await recordDraft(contactId, kind, subject, body) };
+  if (!tpl) return { status: "failed" as const, error: "Template was deleted." };
+  const { subject, body } = await ai.draft(tpl, profile, c, co ?? null, prior, job.instruction);
+  return { status: "done" as const, messageId: await recordDraft(contactId, tpl.kind, subject, body) };
 }
 
 async function enrichItem(contactId: number) {

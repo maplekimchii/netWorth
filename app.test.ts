@@ -218,17 +218,24 @@ describe("ai", () => {
   it("fills data first, then sends only the slots to the AI", async () => {
     process.env.OPENAI_API_KEY = "test";
     openaiReply = '{"hook": "Loved your talk."}';
-    const tpl = { subject: "{target_role} at {company}", body: "Hi {first_name},\n[[hook: about {company}]]\n{my_name}" };
+    const tpl = { name: "Intro", kind: "initial" as const, subject: "{target_role} at {company}", body: "Hi {first_name},\n[[hook: about {company}]]\n{my_name}" };
     expect(await ai.draft(tpl, profile, contact, null, [])).toEqual({ subject: "Product at Stripe", body: "Hi Cher,\nLoved your talk.\nAlex Lee" });
     const input = String(openaiCalls[0].input);
     expect(input).toContain('- "hook": about Stripe');
     expect(input).toContain("hey!");
     expect(input).toContain("<template>\nSubject: Product at Stripe\n\nHi Cher,\n[[hook: about Stripe]]");
+    expect(input).toContain('Occasion: first email to Cher (template "Intro")');
     expect(openaiCalls[0].tools).toBeUndefined();
   });
 
+  it("tells the AI a follow-up is a follow-up and when I last wrote", () => {
+    const prior = [{ subject: "Hi", body: "", sentAt: new Date("2026-10-01T14:00:00Z") }];
+    expect(ai.occasion({ name: "Nudge", kind: "followup" }, contact, prior))
+      .toBe('follow-up; I emailed Cher on Oct 1 and have had no reply (template "Nudge")');
+  });
+
   it("greets VPs and above by honorific from their gender, others by first name", async () => {
-    const tpl = { subject: "Hi", body: "Hi {greeting_name}," };
+    const tpl = { name: "T", kind: "initial" as const, subject: "Hi", body: "Hi {greeting_name}," };
     const greet = async (title: string, gender: string) =>
       (await ai.draft(tpl, profile, { ...contact, name: "Jane Doe", title, gender }, null, [])).body;
     expect(await greet("Senior PM", "woman")).toBe("Hi Jane,");
@@ -241,7 +248,7 @@ describe("ai", () => {
   });
 
   it("makes no AI call for a template without slots", async () => {
-    expect(await ai.draft({ subject: "Hi", body: "Hi {first_name}" }, profile, { ...contact, name: "Jane Doe" }, null, []))
+    expect(await ai.draft({ name: "T", kind: "initial", subject: "Hi", body: "Hi {first_name}" }, profile, { ...contact, name: "Jane Doe" }, null, []))
       .toEqual({ subject: "Hi", body: "Hi Jane" });
     expect(openaiCalls).toHaveLength(0);
   });
@@ -427,14 +434,14 @@ describe("batch jobs", () => {
     const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
     const b = (await data.addContact("Bob Roe", "paste", "Figma"))!;
     await data.recordDraft(b, "initial", "Existing", "Body");
-    openaiReply = '{"subject": "Coffee?", "body": "Hi Ann"}';
-    const job = await runAll(await jobs.createJob("draft", "be personable", null, [a, b]));
+    openaiReply = '{"hook": "Hi Ann", "why_company": "Figma."}';
+    const job = await runAll(await jobs.createJob("draft", "be personable", 1, [a, b]));
     expect(job.status).toBe("done");
     expect(job.items.map((i) => [i.name, i.status, i.error])).toEqual([
       ["Ann Lee", "done", null], ["Bob Roe", "failed", "Already has an unsent draft."],
     ]);
     expect(String(openaiCalls[0].input)).toContain("be personable");
-    expect((await data.listDrafts()).map((d) => d.m.subject).sort()).toEqual(["Coffee?", "Existing"]);
+    expect((await data.listDrafts()).map((d) => d.m.subject).sort()).toEqual(["Existing", "Waterloo student interested in Figma"]);
     expect((await data.getContact(a))!.status).toBe("drafted");
   });
 
@@ -451,18 +458,18 @@ describe("batch jobs", () => {
   it("records AI failures per item and can retry them", async () => {
     const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
     openaiReply = "not json";
-    let job = await runAll(await jobs.createJob("draft", "", null, [a]));
+    let job = await runAll(await jobs.createJob("draft", "", 1, [a]));
     expect(job.items[0].status).toBe("failed");
     expect(job.status).toBe("done");
     await jobs.retryFailed(job.id);
-    openaiReply = '{"subject": "Hi", "body": "Hello"}';
+    openaiReply = '{"hook": "Hi", "why_company": "Hello"}';
     job = await runAll(job.id);
     expect([job.status, job.items[0].status]).toEqual(["done", "done"]);
   });
 
   it("does nothing after cancel", async () => {
     const a = (await data.addContact("Ann Lee", "paste", "Figma"))!;
-    const id = await jobs.createJob("draft", "", null, [a]);
+    const id = await jobs.createJob("draft", "", 1, [a]);
     await jobs.cancelJob(id);
     expect(await jobs.runItem((await jobs.pendingItems(id))[0])).toEqual({ status: "skipped" });
     expect(openaiCalls).toHaveLength(0);
@@ -480,6 +487,7 @@ describe("batch jobs", () => {
 
   it("refuses an empty selection", async () => {
     await expect(jobs.createJob("draft", "", null, [])).rejects.toThrow("Pick at least one");
+    await expect(jobs.createJob("draft", "", null, [1])).rejects.toThrow("Pick a template");
   });
 });
 

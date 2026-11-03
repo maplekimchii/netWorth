@@ -56,8 +56,7 @@ export default async function Batch({ searchParams }: PageProps<"/batch">) {
                 <label className="row"><input type="radio" name="kind" value="enrich" /> Fill in missing industry, team, and school</label>
               </div>
               <label className="field"><span>Template <span className="hint">for drafts</span></span>
-                <select name="templateId" defaultValue="">
-                  <option value="">No template: AI writes the whole email</option>
+                <select name="templateId" defaultValue={tpls.find((t) => t.kind === "initial")?.id}>
                   {tpls.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select></label>
               <label className="field"><span>Instruction <span className="hint">for drafts, e.g. &quot;personable, mention a shared school if there is one&quot;</span></span>
