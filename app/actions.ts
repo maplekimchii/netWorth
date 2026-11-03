@@ -68,6 +68,15 @@ export async function setStatus(id: number, fd: FormData) {
   refresh();
 }
 
+/** Form posts `days` (e.g. 3), or `dismiss` to stop reminding. */
+export async function snoozeFollowup(id: number, fd: FormData) {
+  await requireUser();
+  const days = fd.has("dismiss") ? null : optInt(s(fd, "days"));
+  if (!fd.has("dismiss") && days === null) throw new Error("Bad days");
+  await data.snoozeFollowup(id, days);
+  refresh();
+}
+
 export type Draft = { subject: string; body: string; kind: "initial" | "followup"; unfilled: string[] };
 export type DraftState = { draft?: Draft; error?: string } | null;
 

@@ -94,6 +94,17 @@ describe("data rules", () => {
     expect(due[0].daysLate).toBe(0);
   });
 
+  it("snoozes and dismisses a follow-up", async () => {
+    const { cid } = await sentContact();
+    await data.snoozeFollowup(cid, 3, "2026-10-06");
+    expect((await data.getContact(cid))!.nextFollowupDate).toBe("2026-10-09");
+    expect((await data.todayView("2026-10-08")).due).toEqual([]);
+    await data.snoozeFollowup(cid, null);
+    const c = (await data.getContact(cid))!;
+    expect([c.status, c.nextFollowupDate]).toEqual(["sent", null]);
+    expect((await data.todayView("2026-10-30")).due).toEqual([]);
+  });
+
   it("marking sent twice is a no-op", async () => {
     const { cid, mid } = await sentContact();
     await data.markSent(mid, new Date("2026-10-09T09:00:00Z"));

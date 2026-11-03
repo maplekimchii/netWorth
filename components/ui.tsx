@@ -1,3 +1,4 @@
+import { setStatus, snoozeFollowup } from "@/app/actions";
 import type { getContact } from "@/lib/data";
 import { label, safeUrl } from "@/lib/format";
 
@@ -18,6 +19,27 @@ export function ContactDetails({ c }: { c: NonNullable<Awaited<ReturnType<typeof
       <div><dt>Source</dt><dd>{c.attributes.source || label(c.source)}</dd></div>
       <div><dt>Notes</dt><dd><pre>{c.notes || "—"}</pre></dd></div>
     </dl>
+  );
+}
+
+/** Manage a pending follow-up: remind later, dismiss, or record a reply. Shared by Today and Drafts. */
+export function FollowupActions({ id }: { id: number }) {
+  return (
+    <>
+      <form className="inline" action={snoozeFollowup.bind(null, id)}>
+        <select name="days" aria-label="Remind me" defaultValue="3" className="btn-sm">
+          <option value="1">Tomorrow</option>
+          <option value="3">In 3 days</option>
+          <option value="7">In 1 week</option>
+          <option value="14">In 2 weeks</option>
+        </select>
+        <button className="btn btn-sm">Remind me</button>
+        <button className="btn btn-sm btn-ghost" name="dismiss" value="1" title="Stop reminding; contact stays sent">Dismiss</button>
+      </form>
+      <form className="inline" action={setStatus.bind(null, id)}>
+        <button className="btn btn-sm btn-ghost" name="status" value="replied">Replied</button>
+      </form>
+    </>
   );
 }
 

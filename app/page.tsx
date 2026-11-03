@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { markSent, setStatus } from "@/app/actions";
-import { Pill } from "@/components/ui";
+import { FollowupActions, Pill } from "@/components/ui";
 import { stats, todayView } from "@/lib/data";
 import { niceDate, plural, TZ } from "@/lib/format";
 import { requireUser } from "@/lib/session";
@@ -45,6 +45,7 @@ export default async function Today() {
                       <Link className="btn btn-sm btn-ghost" href={`/contacts/${c.id}#draft`}>Follow up anyway</Link>
                     </>
                   ) : <Link className="btn btn-sm btn-primary" href={`/contacts/${c.id}#draft`}>Draft follow-up</Link>}
+                  <FollowupActions id={c.id} />
                 </li>
               ))}
             </ul>

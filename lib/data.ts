@@ -140,6 +140,12 @@ export async function setStatus(id: number, status: string) {
   await db.update(contacts).set({ status: status as Status, nextFollowupDate: next }).where(eq(contacts.id, id));
 }
 
+/** Remind me in `days` (from today), or with null dismiss the follow-up. Status stays 'sent'. */
+export async function snoozeFollowup(id: number, days: number | null, day = today()) {
+  await db.update(contacts).set({ nextFollowupDate: days === null ? null : addDays(day, days) })
+    .where(and(eq(contacts.id, id), eq(contacts.status, "sent")));
+}
+
 export async function recordDraft(contactId: number, kind: "initial" | "followup", subject: string, body: string) {
   const [m] = await db.insert(messages).values({ contactId, kind, subject, body }).returning({ id: messages.id });
   await db.update(contacts).set({ status: "drafted" })

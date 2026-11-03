@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { deleteDrafts, markReplied, markUnsent } from "@/app/actions";
 import { ConfirmButton } from "@/components/client";
 import { DraftControls } from "@/components/drafts";
-import { ContactDetails, Pill } from "@/components/ui";
+import { ContactDetails, FollowupActions, Pill } from "@/components/ui";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { getContact, listDrafts } from "@/lib/data";
@@ -77,7 +77,10 @@ export default async function Drafts({ searchParams }: PageProps<"/drafts">) {
                       <form className="inline" action={markUnsent.bind(null, sel.m.id)}><button className="btn btn-sm">Move back to drafts</button></form>
                     </>}
                     <Link className="btn btn-sm btn-ghost" href={`/contacts/${c.id}#draft`}>Draft follow-up</Link>
-                    {c.nextFollowupDate && <span className="muted small">follow-up due {niceDate(c.nextFollowupDate)}</span>}
+                    {c.status === "sent" && <>
+                      <FollowupActions id={c.id} />
+                      <span className="muted small">{c.nextFollowupDate ? `follow-up due ${niceDate(c.nextFollowupDate)}` : "follow-up dismissed"}</span>
+                    </>}
                   </div>
                 </>
               ) : (
