@@ -14,13 +14,17 @@ export function DraftEditor({ contactId, templates, preferredId }: {
   const d = blank ?? state?.draft;
   return (
     <div className="card-body">
-      <form action={(fd) => { setBlank(null); run(fd); }} className="row">
+      <form action={(fd) => { setBlank(null); run(fd); }} className="stack" style={{ gap: 8 }}>
+        <textarea name="instruction" rows={2} aria-label="Instructions for the AI"
+          placeholder={'Optional instructions on top of the template, e.g. "focus on their payments work, mention we both did FYDP"'} />
+        <div className="row">
         <select name="templateId" defaultValue={preferredId} aria-label="Template" style={{ flex: 1, width: "auto" }}>
           {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
         <Submit className="btn btn-primary" pending="Drafting…">Draft with AI</Submit>
         <button type="button" className="btn btn-ghost"
           onClick={() => setBlank({ subject: "", body: "", kind: preferredKind, unfilled: [] })}>Write it myself</button>
+        </div>
       </form>
       {state?.error && <p className="note" role="alert">{state.error}</p>}
       {d && (

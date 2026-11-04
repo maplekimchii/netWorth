@@ -88,7 +88,7 @@ export async function draftWithAI(contactId: number, _prev: DraftState, fd: Form
   const [co] = c.companyId ? await db.select().from(companies).where(eq(companies.id, c.companyId)) : [];
   const prior = await db.select().from(messages).where(eq(messages.contactId, contactId)).orderBy(messages.id);
   try {
-    const { subject, body } = await ai.draft(tpl, await data.getProfile(), c, co ?? null, prior);
+    const { subject, body } = await ai.draft(tpl, await data.getProfile(), c, co ?? null, prior, s(fd, "instruction"));
     return { draft: { subject, body, kind: tpl.kind, unfilled: unfilled(`${subject}\n${body}`) } };
   } catch (e) {
     return aiError(e);
