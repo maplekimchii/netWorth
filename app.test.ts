@@ -11,7 +11,7 @@ import * as importers from "@/lib/importers";
 import * as jobs from "@/lib/jobs";
 import { buildTree, parseLevels, type GraphContact } from "@/lib/graph";
 import { composeUrl, niceDate, safeUrl, today } from "@/lib/format";
-import { AIError, applySlots, extractSlots, fillData, parseJson, unfilled } from "@/lib/templating";
+import { AIError, applySlots, extractSlots, fillData, parseEdit, parseJson, unfilled } from "@/lib/templating";
 
 vi.mock("@/db", async () => {
   const { PGlite } = await import("@electric-sql/pglite");
@@ -25,11 +25,15 @@ vi.mock("@/db", async () => {
 
 const openaiCalls: Record<string, unknown>[] = [];
 let openaiReply = '{"ok": true}';
+let openaiStream: Record<string, unknown>[] = [];
 vi.mock("openai", () => {
   class APIError extends Error {}
   class OpenAI {
     static APIError = APIError;
-    responses = { create: async (args: Record<string, unknown>) => { openaiCalls.push(args); return { output_text: openaiReply }; } };
+    responses = { create: async (args: Record<string, unknown>) => {
+      openaiCalls.push(args);
+      return args.stream ? (async function* () { yield* openaiStream; })() : { output_text: openaiReply };
+    } };
   }
   return { default: OpenAI };
 });
@@ -192,6 +196,13 @@ describe("data rules", () => {
 });
 
 describe("templating", () => {
+  it("splits a streamed draft-chat reply into note, subject, and body", () => {
+    expect(parseEdit("Made it shorter.\n===DR")).toEqual({ reply: "Made it shorter." });
+    expect(parseEdit("Done.\n===DRAFT===\nSubject: Coff")).toEqual({ reply: "Done.", subject: "Coff", body: undefined });
+    expect(parseEdit("Done.\n===DRAFT===\nSubject: Coffee?\n\nHi Jane,\nQuick one")).toEqual({ reply: "Done.", subject: "Coffee?", body: "Hi Jane,\nQuick one" });
+    expect(parseEdit("It reads well as is.")).toEqual({ reply: "It reads well as is." });
+  });
+
   it("leaves unknown and empty placeholders visible", () => {
     const out = fillData("Hi {first_name} at {company}, {mystery}", { first_name: "Jane", company: "" });
     expect(out).toBe("Hi Jane at {company}, {mystery}");
@@ -251,6 +262,27 @@ describe("ai", () => {
     expect(await ai.draft({ name: "T", kind: "initial", subject: "Hi", body: "Hi {first_name}" }, profile, { ...contact, name: "Jane Doe" }, null, []))
       .toEqual({ subject: "Hi", body: "Hi Jane" });
     expect(openaiCalls).toHaveLength(0);
+  });
+
+  it("builds the draft-chat prompt with the draft and conversation, no voice samples", () => {
+    const history = [{ role: "me" as const, text: "warmer" }, { role: "ai" as const, text: "Warmed it up." }];
+    const input = ai.editPrompt({ subject: "Hi", body: "Long body" }, history, "shorter", profile, contact, null, []);
+    expect(input).toContain("<current_draft>\nSubject: Hi\n\nLong body\n</current_draft>");
+    expect(input).toContain("Me: warmer\nYou: Warmed it up.");
+    expect(input).toContain("My request: shorter");
+    expect(input).not.toContain("voice");
+  });
+
+  it("streams thinking and text deltas from the AI", async () => {
+    process.env.OPENAI_API_KEY = "test";
+    openaiStream = [
+      { type: "response.reasoning_summary_text.delta", delta: "Trim it." },
+      { type: "response.output_text.delta", delta: "Shorter now." },
+    ];
+    const got = [];
+    for await (const e of ai.streamEdit("p")) got.push(e);
+    expect(got).toEqual([{ type: "thinking", text: "Trim it." }, { type: "text", text: "Shorter now." }]);
+    expect(openaiCalls[0]).toMatchObject({ stream: true, reasoning: { summary: "auto" } });
   });
 
   it("uses web search only for research calls", async () => {

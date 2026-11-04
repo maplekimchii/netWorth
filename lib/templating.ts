@@ -4,6 +4,19 @@ const SLOT = /\[\[(\w+):\s*([\s\S]*?)\]\]/g;
 
 export class AIError extends Error {}
 
+/** Separates the AI's note from the revised draft in a draft-chat reply. */
+export const EDIT_MARKER = "===DRAFT===";
+
+/** Split a (possibly partial) draft-chat reply into the note and, if present, the revised subject and body. */
+export function parseEdit(text: string): { reply: string; subject?: string; body?: string } {
+  const i = text.indexOf(EDIT_MARKER);
+  // A half-streamed marker at the end is not part of the note.
+  if (i < 0) return { reply: text.replace(/\n=[=A-Z]*$/, "").trim() };
+  const draft = text.slice(i + EDIT_MARKER.length).replace(/^\s*\n/, "");
+  const m = /^Subject:[ \t]*([^\n]*)(?:\n\n?([\s\S]*))?$/.exec(draft);
+  return m ? { reply: text.slice(0, i).trim(), subject: m[1], body: m[2] } : { reply: text.slice(0, i).trim() };
+}
+
 /** Replace {name} placeholders that have a value; leave the rest visible. */
 export function fillData(text: string, values: Record<string, string>): string {
   return text.replace(PLACEHOLDER, (m, k: string) => values[k] || m);

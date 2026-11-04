@@ -2,6 +2,7 @@
 import OpenAI from "openai";
 import {
   AIError, applySlots, dataValues, extractSlots, fillData, parseJson, type Profile,
+  EDIT_MARKER,
 } from "./templating";
 import { TZ } from "./format";
 
@@ -154,6 +155,42 @@ export function occasion(template: { name: string; kind: string }, contact: { na
   const last = prior.filter((m) => m.sentAt).at(-1)?.sentAt;
   const when = last ? ` on ${last.toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric" })}` : "";
   return `follow-up; I emailed ${contact.name}${when} and have had no reply (template "${template.name}")`;
+}
+
+export type ChatTurn = { role: "me" | "ai"; text: string };
+export type EditEvent = { type: "thinking" | "text"; text: string };
+
+/** Prompt for one chat turn. The reply is plain text so it can stream: a note to me, then EDIT_MARKER and the full draft. */
+export function editPrompt(
+  current: { subject: string; body: string }, history: ChatTurn[], request: string,
+  profile: Profile, contact: DraftContact, company: DraftCompany, prior: PriorMessage[],
+) {
+  const chat = history.map((t) => `${t.role === "me" ? "Me" : "You"}: ${t.text}`).join("\n");
+  return `${context(profile, contact, company, prior)}
+
+<current_draft>
+Subject: ${current.subject}
+
+${current.body}
+</current_draft>
+${chat ? `\n<conversation_so_far>\n${chat}\n</conversation_so_far>\n` : ""}
+My request: ${request}
+
+Revise the current draft to do what I ask. Change only what the request needs and keep everything else exactly as written. If I ask a question rather than for a change, answer it and leave the draft alone.
+
+Reply in plain text, not JSON: first one or two sentences to me on what you changed (or your answer). If you changed the draft, follow with a line containing only ${EDIT_MARKER}, then "Subject: " and the full subject, a blank line, and the full body. If you did not change it, stop after your note.`;
+}
+
+/** Stream one chat turn: reasoning summary deltas as "thinking", reply deltas as "text". */
+export async function* streamEdit(prompt: string): AsyncGenerator<EditEvent> {
+  const stream = await openai().responses.create({
+    model: MODEL, instructions: SLOT_SYSTEM, input: prompt, stream: true, reasoning: { summary: "auto" },
+  });
+  for await (const ev of stream) {
+    if (ev.type === "response.reasoning_summary_text.delta") yield { type: "thinking", text: ev.delta };
+    else if (ev.type === "response.output_text.delta") yield { type: "text", text: ev.delta };
+    else if (ev.type === "error") throw new AIError(ev.message);
+  }
 }
 
 /** Fill a template for one contact. `extra` is an optional one-off instruction (used by batch jobs). */

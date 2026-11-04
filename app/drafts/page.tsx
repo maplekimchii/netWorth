@@ -91,6 +91,7 @@ export default async function Drafts({ searchParams }: PageProps<"/drafts">) {
           </section>
 
           <aside className="stack drafts-person">
+            {!sent && <div id="draft-chat" />}
             <section className="card" aria-labelledby="person-h">
               <div className="card-head">
                 <h2 id="person-h"><Link href={`/contacts/${c.id}`}>{c.name}</Link></h2>

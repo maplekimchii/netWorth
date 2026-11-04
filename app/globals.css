@@ -266,3 +266,18 @@ details.edit[open] + .kv { display: none; }
 }
 .timeline .email-editor { margin-top: 8px; }
 .timeline .email-editor .email-body { min-height: 200px; }
+
+/* AI chat beside the draft editor. */
+.chat { display: flex; flex-direction: column; }
+.chat-log { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; max-height: 45vh; overflow-y: auto; }
+.chat-msg { padding: 8px 10px; border-radius: var(--radius-sm); line-height: 1.5; white-space: pre-wrap; max-width: 90%; }
+.chat-msg.me { align-self: flex-end; background: var(--accent-soft); }
+.chat-msg.ai { background: var(--bg); border: 1px solid var(--line-soft); }
+.chat-msg.error { color: var(--red-fg); }
+.chat-ai { display: flex; flex-direction: column; gap: 4px; align-self: flex-start; max-width: 90%; }
+.chat-ai .chat-msg { max-width: none; }
+.chat-step { color: var(--muted); font-size: 12.5px; }
+.chat-step summary { cursor: pointer; }
+.chat-thinking { white-space: pre-wrap; margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--line-soft); }
+.chat-input { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--line-soft); }
+.chat-input textarea { flex: 1; resize: vertical; }
