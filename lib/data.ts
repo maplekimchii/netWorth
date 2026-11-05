@@ -105,6 +105,26 @@ export async function updateContact(id: number, name: string, company: string, f
     .where(eq(contacts.id, id));
 }
 
+/** Delete companies (all when `ids` is null). Their contacts stay, without a company; their applications go. */
+export async function deleteCompanies(ids: number[] | null) {
+  const which = ids ? inArray(companies.id, ids) : undefined;
+  await db.update(contacts).set({ companyId: null }).where(ids ? inArray(contacts.companyId, ids) : isNotNull(contacts.companyId));
+  await (ids ? db.delete(applications).where(inArray(applications.companyId, ids)) : db.delete(applications));
+  return (await db.delete(companies).where(which).returning({ id: companies.id })).length;
+}
+
+/** Delete companies no contact or application points to; only among `ids` when given. Returns how many went. */
+export async function deleteUnusedCompanies(ids?: (number | null)[]) {
+  const only = ids?.filter((i): i is number => i !== null);
+  if (only && !only.length) return 0;
+  const gone = await db.delete(companies).where(and(
+    only ? inArray(companies.id, only) : undefined,
+    sql`not exists (select 1 from ${contacts} where ${contacts.companyId} = ${companies.id})`,
+    sql`not exists (select 1 from ${applications} where ${applications.companyId} = ${companies.id})`,
+  )).returning({ id: companies.id });
+  return gone.length;
+}
+
 export async function getContact(id: number) {
   const [row] = await db.select({ c: contacts, company: companies.name }).from(contacts)
     .leftJoin(companies, eq(companies.id, contacts.companyId)).where(eq(contacts.id, id));

@@ -98,6 +98,22 @@ describe("data rules", () => {
     expect(due[0].daysLate).toBe(0);
   });
 
+  it("deletes companies, keeping their contacts, and clears out unused ones", async () => {
+    const jane = (await data.addContact("Jane Doe", "paste", "Stripe"))!;
+    await data.addContact("Ann Lee", "paste", "Figma");
+    const figma = (await data.getOrCreateCompany("Figma"))!;
+    const empty = (await data.getOrCreateCompany("Empty Co"))!;
+    const applied = (await data.getOrCreateCompany("Applied Co"))!;
+    await data.addApplication("Applied Co", "PM");
+    const stripe = (await data.getContact(jane))!.companyId!;
+    expect(await data.deleteCompanies([stripe])).toBe(1);
+    expect((await data.getContact(jane))!.companyId).toBeNull();
+    expect(await data.deleteUnusedCompanies([figma, empty])).toBe(1); // only Empty Co: Figma still has Ann
+    expect(await data.deleteUnusedCompanies()).toBe(0); // Applied Co has an application
+    const { rows } = await run(sql`select id from companies order by id`) as unknown as { rows: { id: number }[] };
+    expect(rows.map((r) => r.id)).toEqual([figma, applied]);
+  });
+
   it("snoozes and dismisses a follow-up", async () => {
     const { cid } = await sentContact();
     await data.snoozeFollowup(cid, 3, "2026-10-06");

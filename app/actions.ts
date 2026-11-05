@@ -57,7 +57,9 @@ export async function deleteContacts(fd: FormData) {
   const ids = fd.getAll("id").map(Number).filter(Number.isInteger);
   if (!fd.has("all") && !ids.length) go("/contacts", "Tick the contacts to delete first.");
   const gone = await (fd.has("all") ? db.delete(contacts) : db.delete(contacts).where(inArray(contacts.id, ids)))
-    .returning({ id: contacts.id });
+    .returning({ id: contacts.id, companyId: contacts.companyId });
+  // Their companies go too once nobody is left there (companies with applications stay).
+  await data.deleteUnusedCompanies(gone.map((c) => c.companyId));
   refresh();
   go("/contacts", `Deleted ${plural(gone.length, "contact")}.`);
 }
@@ -149,6 +151,20 @@ export async function addCompany(fd: FormData) {
   await requireUser();
   const id = await data.getOrCreateCompany(s(fd, "name"));
   go(id ? `/companies/${id}` : "/companies");
+}
+
+export async function deleteCompanies(fd: FormData) {
+  await requireUser();
+  if (fd.has("unused")) {
+    const n = await data.deleteUnusedCompanies();
+    refresh();
+    go("/companies", `Removed ${plural(n, "company")} with no contacts or applications.`);
+  }
+  const ids = fd.getAll("id").map(Number).filter(Number.isInteger);
+  if (!fd.has("all") && !ids.length) go("/companies", "Tick the companies to delete first.");
+  const n = await data.deleteCompanies(fd.has("all") ? null : ids);
+  refresh();
+  go("/companies", `Deleted ${plural(n, "company")}.`);
 }
 
 export async function updateCompany(id: number, fd: FormData) {
