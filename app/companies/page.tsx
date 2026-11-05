@@ -40,13 +40,13 @@ export default async function Companies() {
                 confirm="Delete ALL companies and all applications? Contacts stay, without a company. This can't be undone.">Delete all companies</ConfirmButton>
             </form>
             <table className="table">
-              <thead><tr><th aria-label="Select"></th><th>Company</th><th>Industry</th><th>Priority</th><th className="num">People</th><th>News updated</th></tr></thead>
+              <thead><tr><th aria-label="Select"></th><th>Company</th><th>Scale</th><th>Priority</th><th className="num">People</th><th>News updated</th></tr></thead>
               <tbody>
                 {rows.map(({ co, people }) => (
                   <tr key={co.id}>
                     <td><input type="checkbox" form="bulk" name="id" value={co.id} aria-label={`Select ${co.name}`} /></td>
                     <td><Link className="name" href={`/companies/${co.id}`}>{co.name}</Link>{co.domain && <div className="sub">{co.domain}</div>}</td>
-                    <td className="sub">{co.industry}</td>
+                    <td className="sub">{co.scale}</td>
                     <td><span className={`pill ${co.priority === 1 ? "s-warn" : ""}`}>P{co.priority}</span></td>
                     <td className="num">{people}</td>
                     <td className="sub">{niceDate(co.newsUpdatedAt) || "—"}</td>

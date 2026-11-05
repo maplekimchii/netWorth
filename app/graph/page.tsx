@@ -14,12 +14,12 @@ export default async function Graph({ searchParams }: PageProps<"/graph">) {
   await requireUser();
   const a = await searchParams;
   const [rows, views, me] = await Promise.all([
-    db.select({ c: contacts, company: companies.name, industry: companies.industry }).from(contacts)
+    db.select({ c: contacts, company: companies.name, scale: companies.scale }).from(contacts)
       .leftJoin(companies, eq(companies.id, contacts.companyId)),
     db.select().from(graphViews).orderBy(asc(graphViews.name)),
     getProfile(),
   ]);
-  const people = rows.map((r) => ({ ...r.c, company: r.company, industry: r.industry }));
+  const people = rows.map((r) => ({ ...r.c, company: r.company, scale: r.scale }));
   const attributeKeys = [...new Set(people.flatMap((p) => Object.keys(p.attributes)))].sort();
   const view = views.find((v) => String(v.id) === a.view);
   const levels = parseLevels(view ? view.levels.join(",") : (a.levels as string | undefined), attributeKeys);

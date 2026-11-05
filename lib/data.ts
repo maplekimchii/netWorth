@@ -51,7 +51,7 @@ export async function contactExists(name: string, company = "") {
 }
 
 export const CONTACT_TEXT_FIELDS = [
-  "title", "email", "linkedinUrl", "howConnected", "notes", "team", "school", "program", "location", "gender",
+  "title", "email", "linkedinUrl", "howConnected", "notes", "type", "team", "school", "program", "location", "gender",
 ] as const;
 export const GENDERS = ["woman", "man", "nonbinary"] as const;
 
@@ -94,8 +94,16 @@ export async function addContact(name: string, source: Source, company = "", fie
   if (!n) throw new Error("A contact needs a name.");
   const companyId = await getOrCreateCompany(company);
   if (await isDup(n, companyId)) return null;
+  const values = contactValues(fields);
+  // No type given: use the most common one among people already at this company.
+  if (!values.type && companyId) {
+    const [top] = await db.select({ type: contacts.type }).from(contacts)
+      .where(and(eq(contacts.companyId, companyId), sql`${contacts.type} <> ''`))
+      .groupBy(contacts.type).orderBy(sql`count(*) desc`).limit(1);
+    values.type = top?.type ?? "";
+  }
   const [row] = await db.insert(contacts)
-    .values({ name: n, source, companyId, ...contactValues(fields) }).returning({ id: contacts.id });
+    .values({ name: n, source, companyId, ...values }).returning({ id: contacts.id });
   return row.id;
 }
 

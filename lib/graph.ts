@@ -2,15 +2,15 @@
 import { label } from "./format";
 
 export const BUILTIN_LEVELS = [
-  "industry", "company", "team", "title", "school", "program", "grad_year", "location", "status", "source", "how_connected",
+  "type", "scale", "company", "team", "title", "school", "program", "grad_year", "location", "status", "source", "how_connected",
 ] as const;
-export const DEFAULT_LEVELS = ["industry", "company"];
+export const DEFAULT_LEVELS = ["type", "scale", "company"];
 export const UNKNOWN = "Unknown";
 
 export type GraphContact = {
   id: number; name: string; title: string; team: string; school: string; program: string; gradYear: number | null; location: string;
-  status: string; source: string; howConnected: string; attributes: Record<string, string>;
-  company: string | null; industry: string | null;
+  status: string; source: string; howConnected: string; attributes: Record<string, string>; type: string;
+  company: string | null; scale: string | null;
 };
 
 export type TreeNode = { name: string; count: number; contactId?: number; children?: TreeNode[] };
@@ -22,7 +22,7 @@ export function levelLabel(level: string) {
 
 function value(c: GraphContact, level: string): string {
   const v: Record<string, unknown> = {
-    industry: c.industry, company: c.company, team: c.team, title: c.title, school: c.school, program: c.program,
+    type: c.type, scale: c.scale, company: c.company, team: c.team, title: c.title, school: c.school, program: c.program,
     grad_year: c.gradYear, location: c.location, status: c.status && label(c.status), source: c.source && label(c.source), how_connected: c.howConnected,
   };
   const raw = level in v ? v[level] : c.attributes[level.replace(/^attr:/, "")];
@@ -47,7 +47,7 @@ export function buildTree(contacts: GraphContact[], levels: string[], rootName =
   return { name: rootName, count: contacts.length, children: group(contacts, 0) };
 }
 
-/** Parse ?levels=industry,company into known levels only. */
+/** Parse ?levels=type,company into known levels only. */
 export function parseLevels(raw: string | undefined, attributeKeys: string[]): string[] {
   const known = new Set<string>([...BUILTIN_LEVELS, ...attributeKeys.map((k) => `attr:${k}`)]);
   const levels = (raw ?? "").split(",").map((s) => s.trim()).filter((s) => known.has(s));

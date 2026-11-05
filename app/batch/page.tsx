@@ -53,7 +53,7 @@ export default async function Batch({ searchParams }: PageProps<"/batch">) {
             <div className="card-body stack" style={{ gap: 12 }}>
               <div className="row">
                 <label className="row"><input type="radio" name="kind" value="draft" defaultChecked /> Draft an email for each</label>
-                <label className="row"><input type="radio" name="kind" value="enrich" /> Fill in missing industry, team, and school</label>
+                <label className="row"><input type="radio" name="kind" value="enrich" /> Fill in missing type, scale, team, and school</label>
               </div>
               <label className="field"><span>Template <span className="hint">for drafts</span></span>
                 <select name="templateId" defaultValue={tpls.find((t) => t.kind === "initial")?.id}>

@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { addApplication, refreshNews, updateCompany } from "@/app/actions";
 import { Submit } from "@/components/client";
-import { Pill } from "@/components/ui";
+import { Choice, Pill } from "@/components/ui";
 import { db } from "@/db";
 import { applications, companies, contacts } from "@/db/schema";
 import { listContacts } from "@/lib/data";
-import { niceDate, plural } from "@/lib/format";
+import { niceDate, plural, SCALES } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 
 export default async function CompanyPage({ params }: PageProps<"/companies/[id]">) {
@@ -41,7 +41,7 @@ export default async function CompanyPage({ params }: PageProps<"/companies/[id]
                 <textarea name="notes" rows={4} defaultValue={co.notes} placeholder="What draws you here: product, team, mission, a recent launch…" /></label>
               <div className="form-grid">
                 <label className="field"><span>Website domain</span><input name="domain" defaultValue={co.domain} placeholder="stripe.com" /></label>
-                <label className="field"><span>Industry</span><input name="industry" defaultValue={co.industry} placeholder="Fintech" /></label>
+                <label className="field"><span>Scale</span><Choice name="scale" value={co.scale} groups={SCALES} /></label>
                 <label className="field"><span>Priority</span>
                   <select name="priority" defaultValue={co.priority}>
                     <option value={1}>P1 · top target</option><option value={2}>P2</option><option value={3}>P3 · maybe</option>

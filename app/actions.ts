@@ -170,7 +170,7 @@ export async function deleteCompanies(fd: FormData) {
 export async function updateCompany(id: number, fd: FormData) {
   await requireUser();
   await db.update(companies).set({
-    domain: s(fd, "domain"), industry: s(fd, "industry"), priority: optInt(s(fd, "priority")) ?? 2, notes: s(fd, "notes"),
+    domain: s(fd, "domain"), scale: s(fd, "scale"), priority: optInt(s(fd, "priority")) ?? 2, notes: s(fd, "notes"),
   }).where(eq(companies.id, id));
   go(`/companies/${id}`, "Saved.");
 }

@@ -30,7 +30,7 @@ export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   domain: text("domain").notNull().default(""),
-  industry: text("industry").notNull().default(""),
+  scale: text("scale").notNull().default(""), // firm tier, e.g. "Bulge Bracket"; options in lib/format.ts SCALES
   priority: integer("priority").notNull().default(2),
   notes: text("notes").notNull().default(""),
   news: text("news").notNull().default(""),
@@ -51,6 +51,7 @@ export const contacts = pgTable("contacts", {
   nextFollowupDate: date("next_followup_date"),
   followupCount: integer("followup_count").notNull().default(0),
   // Network graph fields; `attributes` holds user-defined ones like {"city": "Toronto"}.
+  type: text("type").notNull().default(""), // the person's line of work, e.g. "Investment Banking"; options in lib/format.ts TYPES
   team: text("team").notNull().default(""),
   school: text("school").notNull().default(""),
   program: text("program").notNull().default(""),

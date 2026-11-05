@@ -4,7 +4,7 @@ import {
   AIError, applySlots, dataValues, extractSlots, fillData, parseJson, type Profile,
   EDIT_MARKER,
 } from "./templating";
-import { TZ } from "./format";
+import { ALL_SCALES, TYPES, TZ } from "./format";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-6.1-terra";
 
@@ -130,23 +130,33 @@ function context(p: Profile, c: DraftContact, co: DraftCompany, prior: PriorMess
   return lines.join("\n");
 }
 
-export const ENRICH_FIELDS = ["industry", "team", "school", "program", "grad_year"] as const;
+export const ENRICH_FIELDS = ["type", "scale", "team", "school", "program", "grad_year"] as const;
 export type Enriched = Record<(typeof ENRICH_FIELDS)[number], string>;
 
-/** Infer graph fields from what we already know about a contact. Empty when the text does not say. */
-export async function enrich(contact: DraftContact & { team: string; school: string; program: string }): Promise<Enriched> {
-  const data = await askJson("You fill in missing CRM fields from the text given. Use only what the text says or "
-    + "what is common knowledge about the company (for industry). Leave a field empty when unsure.", `Contact: ${contact.name}
+/** Infer graph fields from what we already know about a contact. Empty when the text does not say.
+ * Type and scale must be one of the dropdown options; anything else comes back empty. */
+export async function enrich(contact: DraftContact & { type: string; team: string; school: string; program: string }): Promise<Enriched> {
+  const data = await askJson("You fill in missing CRM fields for a finance recruiting contact list from the text given. "
+    + "Use only what the text says or what is common knowledge about the company (for scale). "
+    + "Leave a field empty when unsure.", `Contact: ${contact.name}
 Title: ${contact.title || "unknown"}
 Company: ${contact.company || "unknown"}
+Type: ${contact.type || "unknown"}
 Team: ${contact.team || "unknown"}
 School: ${contact.school || "unknown"}, program: ${contact.program || "unknown"}
 How we're connected: ${contact.howConnected || "unknown"}
 Notes: ${contact.notes || "none"}
 
+Type is the person's line of work, judged from their title and team (not the whole company). One of: ${TYPES.join("; ")}
+Scale is the company's tier. One of: ${ALL_SCALES.join("; ")}
+Team is their group or desk within the firm, e.g. TMT, FIG, Rates, Healthcare.
+
 Reply with only a JSON object:
-{"industry": "the company's industry in 1-3 words", "team": "", "school": "", "program": "", "grad_year": "4-digit year or empty"}`);
-  return Object.fromEntries(ENRICH_FIELDS.map((k) => [k, str(data[k])])) as Enriched;
+{"type": "", "scale": "", "team": "", "school": "", "program": "", "grad_year": "4-digit year or empty"}`);
+  const out = Object.fromEntries(ENRICH_FIELDS.map((k) => [k, str(data[k])])) as Enriched;
+  if (!(TYPES as readonly string[]).includes(out.type)) out.type = "";
+  if (!ALL_SCALES.includes(out.scale)) out.scale = "";
+  return out;
 }
 
 /** One line telling the AI whether this is a first email or a follow-up, and which template it fills. */

@@ -39,3 +39,36 @@ export function composeUrl(to: string, subject: string, body: string): string {
   const q = new URLSearchParams({ to, subject, body });
   return `https://outlook.office.com/mail/deeplink/compose?${q.toString().replaceAll("+", "%20")}`;
 }
+
+/** A contact's line of work. Dropdown options; the AI picks from these too. */
+export const TYPES = [
+  "Investment Banking",
+  "Sales & Trading",
+  "Equity Research",
+  "Private Equity",
+  "Private Credit",
+  "Hedge Funds",
+  "Asset Management",
+  "Pension Funds",
+  "Venture Capital",
+  "Quant & Prop Trading",
+  "Wealth Management",
+  "Corporate Development",
+  "Transaction Advisory",
+  "Commercial Banking",
+  "Fintech",
+  "Insurance",
+  "Recruiting",
+  "Other",
+] as const;
+
+/** A company's tier, grouped for the dropdown. The AI picks from these too. */
+export const SCALES: Record<string, readonly string[]> = {
+  Banks: ["Bulge Bracket", "Big 6 (Canada)", "Elite Boutique", "Middle Market Bank", "Regional Boutique"],
+  "Buy side": ["Mega-fund", "Upper Middle Market Fund", "Middle Market Fund", "Lower Middle Market Fund",
+    "Multi-Manager Hedge Fund", "Single-Manager Hedge Fund", "Asset Manager"],
+  Pensions: ["Maple 8", "Other Pension / Sovereign Wealth"],
+  Advisory: ["Big 4", "Advisory Boutique"],
+  Other: ["Fintech / Startup", "Corporate", "Insurer", "Other"],
+};
+export const ALL_SCALES = Object.values(SCALES).flat();

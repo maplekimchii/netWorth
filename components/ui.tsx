@@ -1,6 +1,6 @@
 import { setStatus, snoozeFollowup } from "@/app/actions";
 import type { getContact } from "@/lib/data";
-import { label, safeUrl } from "@/lib/format";
+import { label, safeUrl, TYPES } from "@/lib/format";
 
 /** Read-only contact facts. Shared by the Contact and Drafts pages. */
 export function ContactDetails({ c }: { c: NonNullable<Awaited<ReturnType<typeof getContact>>> }) {
@@ -11,6 +11,7 @@ export function ContactDetails({ c }: { c: NonNullable<Awaited<ReturnType<typeof
         // "#" means not a real URL (e.g. "Profile" from a sheet): a link would only reopen this page.
         : safeUrl(c.linkedinUrl) === "#" ? c.linkedinUrl
         : <a href={safeUrl(c.linkedinUrl)} target="_blank" rel="noopener">{c.linkedinUrl.replace("https://", "").replace("www.", "")}</a>}</dd></div>
+      <div><dt>Type</dt><dd>{c.type || "—"}</dd></div>
       <div><dt>Team</dt><dd>{c.team || "—"}</dd></div>
       <div><dt>Gender</dt><dd>{c.gender ? label(c.gender) : "—"}</dd></div>
       <div><dt>Location</dt><dd>{c.location || "—"}</dd></div>
@@ -43,12 +44,25 @@ export function FollowupActions({ id }: { id: number }) {
   );
 }
 
+/** Dropdown over fixed options (grouped when keys are non-empty). A saved value not in the list stays as its own choice. */
+export function Choice({ name, value, groups }: { name: string; value: string; groups: Record<string, readonly string[]> }) {
+  const known = Object.values(groups).flat().includes(value);
+  const opts = (xs: readonly string[]) => xs.map((x) => <option key={x} value={x}>{x}</option>);
+  return (
+    <select name={name} defaultValue={value}>
+      <option value="">Not set</option>
+      {value && !known && <option value={value}>{value} (old)</option>}
+      {Object.entries(groups).map(([g, xs]) => (g ? <optgroup key={g} label={g}>{opts(xs)}</optgroup> : opts(xs)))}
+    </select>
+  );
+}
+
 export function Pill({ status, text }: { status: string; text?: string }) {
   return <span className={`pill s-${status}`}>{text ?? label(status)}</span>;
 }
 
 type Values = Partial<Record<"name" | "company" | "title" | "email" | "linkedinUrl" | "howConnected" | "notes"
-  | "team" | "school" | "program" | "gradYear" | "gender" | "location", string | number | null>> & { attributes?: Record<string, string> };
+  | "type" | "team" | "school" | "program" | "gradYear" | "gender" | "location", string | number | null>> & { attributes?: Record<string, string> };
 
 /** Shared by Add contact, Edit details, and the parsed-profile form. */
 export function ContactFormFields({ v = {}, notes = false }: { v?: Values; notes?: boolean }) {
@@ -58,7 +72,9 @@ export function ContactFormFields({ v = {}, notes = false }: { v?: Values; notes
       <label className="field"><span>Name</span><input name="name" defaultValue={d("name")} required /></label>
       <label className="field"><span>Company</span><input name="company" defaultValue={d("company")} /></label>
       <label className="field"><span>Title</span><input name="title" defaultValue={d("title")} /></label>
-      <label className="field"><span>Team</span><input name="team" defaultValue={d("team")} /></label>
+      <label className="field"><span>Type <span className="hint">their line of work</span></span>
+        <Choice name="type" value={d("type")} groups={{ "": TYPES }} /></label>
+      <label className="field"><span>Team <span className="hint">group or desk, e.g. TMT, Rates</span></span><input name="team" defaultValue={d("team")} /></label>
       <label className="field"><span>Gender <span className="hint">sets Mr./Ms. for VPs and above</span></span>
         <select name="gender" defaultValue={d("gender")}>
           <option value="">Not set</option><option value="woman">Woman (Ms.)</option>

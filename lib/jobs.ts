@@ -90,11 +90,11 @@ async function enrichItem(contactId: number) {
   const year = Number.parseInt(e.grad_year, 10);
   // Only fill blanks; never overwrite what the user typed.
   await db.update(contacts).set({
-    team: c.team || e.team, school: c.school || e.school, program: c.program || e.program,
+    type: c.type || e.type, team: c.team || e.team, school: c.school || e.school, program: c.program || e.program,
     gradYear: c.gradYear ?? (Number.isFinite(year) ? year : null),
   }).where(eq(contacts.id, contactId));
-  if (co && !co.industry && e.industry) {
-    await db.update(companies).set({ industry: e.industry }).where(and(eq(companies.id, co.id), eq(companies.industry, "")));
+  if (co && !co.scale && e.scale) {
+    await db.update(companies).set({ scale: e.scale }).where(and(eq(companies.id, co.id), eq(companies.scale, "")));
   }
   return { status: "done" as const };
 }

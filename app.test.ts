@@ -114,6 +114,15 @@ describe("data rules", () => {
     expect(rows.map((r) => r.id)).toEqual([figma, applied]);
   });
 
+  it("gives a new contact the most common type at their company when none is given", async () => {
+    await data.addContact("Ann Lee", "paste", "RBC", { type: "Investment Banking" });
+    await data.addContact("Bo Chan", "paste", "RBC", { type: "Investment Banking" });
+    await data.addContact("Cy Park", "paste", "RBC", { type: "Sales & Trading" });
+    const d = (await data.addContact("Di Wu", "paste", "RBC"))!;
+    const e = (await data.addContact("Ed Ko", "paste", "RBC", { type: "Equity Research" }))!;
+    expect([(await data.getContact(d))!.type, (await data.getContact(e))!.type]).toEqual(["Investment Banking", "Equity Research"]);
+  });
+
   it("snoozes and dismisses a follow-up", async () => {
     const { cid } = await sentContact();
     await data.snoozeFollowup(cid, 3, "2026-10-06");
@@ -387,12 +396,12 @@ describe("importers", () => {
     expect(c.attributes).toEqual({ Function: "Private Equity", source: "LinkedIn" });
   });
 
-  it("fills an empty company industry from the sheet, never overwriting one", async () => {
-    const map = { Name: "name", Company: "company", Industry: "industry" };
-    await importers.importRows([{ Name: "Ann Lee", Company: "Evercore", Industry: "Investment Banking" }], map, "import");
-    await importers.importRows([{ Name: "Bo Chan", Company: "evercore", Industry: "Asset Management" }], map, "import");
+  it("fills an empty company scale from the sheet, never overwriting one", async () => {
+    const map = { Name: "name", Company: "company", Industry: "scale" };
+    await importers.importRows([{ Name: "Ann Lee", Company: "Evercore", Industry: "Elite Boutique" }], map, "import");
+    await importers.importRows([{ Name: "Bo Chan", Company: "evercore", Industry: "Bulge Bracket" }], map, "import");
     const [co] = await db.select().from(schema.companies);
-    expect([co.name, co.industry]).toEqual(["Evercore", "Investment Banking"]);
+    expect([co.name, co.scale]).toEqual(["Evercore", "Elite Boutique"]);
   });
 
   it("keeps a sheet's own Source column as a custom field, out of notes", async () => {
@@ -523,14 +532,19 @@ describe("batch jobs", () => {
     expect(openaiCalls).toHaveLength(0);
   });
 
-  it("enrich fills only blank fields, including the company's industry", async () => {
+  it("enrich fills only blank fields, including the company's scale, and only with listed options", async () => {
     const a = (await data.addContact("Ann Lee", "paste", "Figma", { school: "UofT" }))!;
-    openaiReply = '{"industry": "Design software", "team": "Growth", "school": "Waterloo", "program": "CS", "grad_year": "2021"}';
+    openaiReply = '{"type": "Investment Banking", "scale": "Design software", "team": "Growth", "school": "Waterloo", "program": "CS", "grad_year": "2021"}';
     await runAll(await jobs.createJob("enrich", "", null, [a]));
     const c = (await data.getContact(a))!;
     expect([c.school, c.team, c.program, c.gradYear]).toEqual(["UofT", "Growth", "CS", 2021]);
-    const { rows } = await run(sql`select industry from companies where name = 'Figma'`) as unknown as { rows: { industry: string }[] };
-    expect(rows[0].industry).toBe("Design software");
+    expect(c.type).toBe("Investment Banking");
+    const { rows } = await run(sql`select scale from companies where name = 'Figma'`) as unknown as { rows: { scale: string }[] };
+    expect(rows[0].scale).toBe(""); // "Design software" is not a listed scale
+    openaiReply = '{"scale": "Bulge Bracket"}';
+    await runAll(await jobs.createJob("enrich", "", null, [a]));
+    const { rows: r2 } = await run(sql`select scale from companies where name = 'Figma'`) as unknown as { rows: { scale: string }[] };
+    expect(r2[0].scale).toBe("Bulge Bracket");
   });
 
   it("refuses an empty selection", async () => {
@@ -542,17 +556,17 @@ describe("batch jobs", () => {
 describe("network graph", () => {
   const person = (id: number, name: string, extra: Partial<GraphContact> = {}): GraphContact => ({
     id, name, title: "", team: "", school: "", program: "", gradYear: null, location: "", status: "to_contact", source: "paste",
-    howConnected: "", attributes: {}, company: null, industry: null, ...extra,
+    howConnected: "", attributes: {}, type: "", company: null, scale: null, ...extra,
   });
   const people = [
-    person(1, "Ann", { industry: "Fintech", company: "Stripe", attributes: { city: "Toronto" } }),
-    person(2, "Bob", { industry: "Fintech", company: "Stripe" }),
-    person(3, "Cy", { industry: "Fintech", company: "Wise" }),
+    person(1, "Ann", { type: "Fintech", company: "Stripe", attributes: { city: "Toronto" } }),
+    person(2, "Bob", { type: "Fintech", company: "Stripe" }),
+    person(3, "Cy", { type: "Fintech", company: "Wise" }),
     person(4, "Di", { company: "Figma" }),
   ];
 
   it("groups by levels in order, biggest first, Unknown last, with counts", () => {
-    const t = buildTree(people, ["industry", "company"], "Sean");
+    const t = buildTree(people, ["type", "company"], "Sean");
     expect(t.name).toBe("Sean");
     expect(t.children!.map((c) => [c.name, c.count])).toEqual([["Fintech", 3], ["Unknown", 1]]);
     expect(t.children![0].children!.map((c) => [c.name, c.count])).toEqual([["Stripe", 2], ["Wise", 1]]);
@@ -560,14 +574,14 @@ describe("network graph", () => {
   });
 
   it("reorders levels and groups by custom attributes", () => {
-    const t = buildTree(people, ["attr:city", "industry"]);
+    const t = buildTree(people, ["attr:city", "type"]);
     expect(t.children!.map((c) => [c.name, c.count])).toEqual([["Toronto", 1], ["Unknown", 3]]); // Unknown last even when bigger
     expect(t.children![0].children![0].name).toBe("Fintech");
   });
 
   it("keeps only known levels from the URL, defaulting when none are left", () => {
     expect(parseLevels("school,attr:city,bogus,school", ["city"])).toEqual(["school", "attr:city"]);
-    expect(parseLevels("bogus", [])).toEqual(["industry", "company"]);
-    expect(parseLevels(undefined, [])).toEqual(["industry", "company"]);
+    expect(parseLevels("bogus", [])).toEqual(["type", "scale", "company"]);
+    expect(parseLevels(undefined, [])).toEqual(["type", "scale", "company"]);
   });
 });

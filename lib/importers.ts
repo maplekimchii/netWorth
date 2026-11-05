@@ -10,12 +10,12 @@ import { addContact, cleanName, getOrCreateCompany, type ContactFields, type Sou
 // Field keys as shown in the mapping dropdown, and the contact column each one fills.
 export const FIELDS = [
   "name", "first_name", "last_name", "company", "title", "email", "linkedin_url", "how_connected", "notes",
-  "team", "school", "program", "grad_year", "location", "gender", "source", "industry", "custom_field",
+  "team", "school", "program", "grad_year", "location", "gender", "source", "type", "scale", "custom_field",
 ] as const;
 type Field = (typeof FIELDS)[number];
 const FIELD_KEY: Partial<Record<Field, Exclude<keyof ContactFields, "attributes">>> = {
   title: "title", email: "email", linkedin_url: "linkedinUrl", how_connected: "howConnected", notes: "notes",
-  team: "team", school: "school", program: "program", grad_year: "gradYear", location: "location", gender: "gender",
+  type: "type", team: "team", school: "school", program: "program", grad_year: "gradYear", location: "location", gender: "gender",
 };
 const LINKEDIN_MAPPING: Record<string, Field> = {
   "First Name": "first_name", "Last Name": "last_name", "Email Address": "email",
@@ -48,11 +48,11 @@ export async function importRows(rows: Row[], mapping: Record<string, string>, s
     if (Object.keys(attributes).length) fields.attributes = attributes;
     if ((await addContact(name, source, f.company ?? "", fields)) === null) report.skipped++;
     else report.added++;
-    // Industry belongs to the company. Fill it only when empty, like AI enrichment does.
-    const companyId = f.industry && (await getOrCreateCompany(f.company));
+    // Scale belongs to the company. Fill it only when empty, like AI enrichment does.
+    const companyId = f.scale && (await getOrCreateCompany(f.company));
     if (companyId) {
-      await db.update(t.companies).set({ industry: f.industry })
-        .where(and(eq(t.companies.id, companyId), eq(t.companies.industry, "")));
+      await db.update(t.companies).set({ scale: f.scale })
+        .where(and(eq(t.companies.id, companyId), eq(t.companies.scale, "")));
     }
   }
   return report;
